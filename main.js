@@ -1,0 +1,1108 @@
+'use strict';
+/* Descriptive Statistics — runs entirely in the browser. No data leave the page. */
+
+// ---------- Settings (easy to modify) ----------
+const CONFIG = {
+  SKEW_THRESHOLD: 1,        // |skewness| below this => approximately symmetric
+  MIN_N_FOR_MEAN: 10,       // below this n, default to Median (IQR)
+  NUMERIC_FRACTION: 0.8,    // share of non-missing values that must be numeric
+  PREVIEW_ROWS: 8,
+  HIGH_MISSING: 0.2,        // warn at >= 20% missing
+  FREQ_LIMIT: 20,           // frequency-table levels shown before 'Show all'
+  T1_MAX_LEVELS: 20,        // categorical levels listed in Table 1
+  CHUNK: 10                 // columns analyzed between UI yields
+};
+const MISSING = new Set(['', 'na', 'n/a', 'nan', 'null', 'missing', '.', '-']);
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let sheetJsPromise = null;
+function loadSheetJS() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (!sheetJsPromise) sheetJsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    script.onload = () => window.XLSX ? resolve(window.XLSX) : reject(new Error('The Excel parser did not load.'));
+    script.onerror = () => { sheetJsPromise = null; reject(new Error('Excel files need an internet connection to load the spreadsheet parser. Your file has not been uploaded.')); };
+    document.head.appendChild(script);
+  });
+  return sheetJsPromise;
+}
+const state = { view: 'home', fig: null, patientId: '', types: {}, choices: {}, t1: { group: '', overall: true, skip: new Set(), selected: new Set(), catChoices: {} }, expandedCategoricals: new Set(), excluded: [], cols: [], baseWarnings: [], fileName: '', headers: [], rows: [], results: [], categorical: [], sortKey: null, sortDir: 1 };
+let aboutReturnState = null;
+
+// ---------- CSV parsing (RFC 4180-style state machine) ----------
+function parseCSV(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  const endRow = () => {
+    row.push(field); field = '';
+    if (row.length > 1 || row[0].trim() !== '') rows.push(row); // skip blank rows
+    row = [];
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else field += c;
+    } else if (c === '"' && field.trim() === '') { field = ''; inQuotes = true; }
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n') endRow();
+    else if (c === '\r') { if (text[i + 1] === '\n') i++; endRow(); }
+    else field += c;
+  }
+  if (field !== '' || row.length) endRow();
+  return { rows, unterminatedQuote: inQuotes };
+}
+
+// ---------- Numeric handling ----------
+function parseNumber(raw) {
+  const s = raw.trim();
+  if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(s)) { const v = Number(s); return isFinite(v) ? v : null; }
+  if (/^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) return Number(s.replace(/,/g, '')); // 1,234
+  return null; // text, "Inf", etc. are never coerced
+}
+
+// Unique internal/display names: Age, Age (2), Age (3)
+function uniqueNames(headers) {
+  const used = new Set();
+  return headers.map((h, i) => {
+    const base = h.trim() || `Column ${i + 1}`;
+    let name = base, k = 2;
+    while (used.has(name)) name = `${base} (${k++})`;
+    used.add(name);
+    return name;
+  });
+}
+
+// ---------- Statistics ----------
+// Quantile: linear interpolation between order statistics (R type 7 / Excel QUARTILE.INC)
+function quantile(sorted, p) {
+  const n = sorted.length;
+  if (!n) return null;
+  const h = (n - 1) * p, lo = Math.floor(h), hi = Math.ceil(h);
+  return sorted[lo] + (h - lo) * (sorted[hi] - sorted[lo]);
+}
+
+// Skewness: adjusted Fisher-Pearson G1 = n/((n-1)(n-2)) * sum(((x-mean)/s)^3); needs n>=3, s>0
+function computeStats(vals) {
+  const sorted = Float64Array.from(vals).sort();
+  const n = sorted.length;
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += sorted[i];
+  const mean = sum / n;
+  let ss = 0;
+  for (let i = 0; i < n; i++) ss += (sorted[i] - mean) ** 2;
+  const sd = n > 1 ? Math.sqrt(ss / (n - 1)) : null; // sample SD (n-1)
+  let skew = null;
+  if (n >= 3 && sd > 0) {
+    let c = 0;
+    for (let i = 0; i < n; i++) c += ((sorted[i] - mean) / sd) ** 3;
+    skew = (n / ((n - 1) * (n - 2))) * c;
+  }
+  const q1 = quantile(sorted, 0.25), median = quantile(sorted, 0.5), q3 = quantile(sorted, 0.75);
+  return { n, mean, sd, median, q1, q3, iqr: q3 - q1, min: sorted[0], max: sorted[n - 1], skew };
+}
+
+// Heuristic only — NOT a normality test
+function chooseMethod(s) {
+  if (s.sd === 0) return 'Mean (SD)';                  // constant variable
+  if (s.n < CONFIG.MIN_N_FOR_MEAN) return 'Median (IQR)';
+  return s.skew !== null && Math.abs(s.skew) < CONFIG.SKEW_THRESHOLD ? 'Mean (SD)' : 'Median (IQR)';
+}
+
+// ---------- Formatting (single central place; rounding only at display time) ----------
+function decimalsFor(r) {
+  const ref = [r.sd, r.iqr, Math.abs(r.mean)].find(v => v > 0) || 1;
+  if (ref >= 100) return 0;
+  if (ref >= 1) return 1;
+  if (ref >= 0.1) return 2;
+  return Math.min(6, Math.ceil(-Math.log10(ref)) + 1);
+}
+function fmt(x, d) {
+  if (x === null || x === undefined || !isFinite(x)) return '—';
+  if (Math.abs(x) >= 1e15) return x.toExponential(2);
+  const s = x.toFixed(d);
+  return Number(s) === 0 ? (0).toFixed(d) : s; // avoid "-0.0"
+}
+function fmtSummary(s, method, d) {
+  return method === 'Mean (SD)' ? `${fmt(s.mean, d)} (${fmt(s.sd, d)})` : `${fmt(s.median, d)} (${fmt(s.q1, d)}–${fmt(s.q3, d)})`;
+}
+function summaryText(r) { return fmtSummary(r, r.method, decimalsFor(r)); }
+const missingText = r => `${r.missing} (${r.missingPct.toFixed(1)}%)`;
+
+// ---------- Column analysis ----------
+function analyzeColumn(name, idx, rows, warnings, forced) {
+  const total = rows.length, raw = new Array(total);
+  let missing = 0;
+  for (let i = 0; i < total; i++) {
+    const s = (rows[i][idx] ?? '').trim();
+    raw[i] = MISSING.has(s.toLowerCase()) ? null : s;
+    if (raw[i] === null) missing++;
+  }
+  const nonMissing = total - missing, missingPct = (missing / total) * 100;
+  if (nonMissing === 0) { warnings.push(`“${name}” is empty and was skipped.`); return { type: 'excluded', name, empty: true }; }
+  if (forced === 'exclude') return { type: 'excluded', name };
+  if (missingPct >= CONFIG.HIGH_MISSING * 100) warnings.push(`“${name}” has ${missingPct.toFixed(0)}% missing values.`);
+  const nums = raw.map(s => s === null ? null : parseNumber(s));   // null = missing or non-numeric
+  const vals = nums.filter(v => v !== null);
+  if (forced === 'numeric' && !vals.length) warnings.push(`“${name}” has no numeric values and was kept categorical.`);
+  const asNum = forced === 'numeric' ? vals.length > 0 : forced === 'categorical' ? false : vals.length / nonMissing >= CONFIG.NUMERIC_FRACTION;
+  if (asNum) {
+    const nonNum = nonMissing - vals.length;
+    if (nonNum) warnings.push(`“${name}”: ${nonNum} non-numeric value(s) were ignored.`);
+    const s = computeStats(vals), auto = chooseMethod(s);
+    if (s.sd === 0) warnings.push(`“${name}” is constant.`);
+    const distinct = new Set(vals).size;
+    if (!forced && vals.length > 1 && distinct <= 5 && vals.every(Number.isInteger)) warnings.push(`“${name}” has only ${distinct} distinct integer values; it may be categorical (see Variable types).`);
+    return { type: 'numeric', name, nums, missing, missingPct, autoMethod: auto, choice: 'auto', method: auto, ...s };
+  }
+  const freq = new Map();   // exact (trimmed, case-sensitive) labels as strings
+  raw.forEach(s => { if (s !== null) freq.set(s, (freq.get(s) || 0) + 1); });
+  if (freq.size === nonMissing && nonMissing > 20) warnings.push(`“${name}” has all-distinct values (possible identifier).`);
+  if (new Set([...freq.keys()].map(k => k.toLowerCase())).size < freq.size) warnings.push(`“${name}” has labels differing only by letter case; they are kept separate.`);
+  return { type: 'categorical', name, labels: raw, freq, unique: freq.size, nonMissing, missing, missingPct };
+}
+
+// Process columns in chunks so the UI stays responsive on wide files
+async function analyzeAll(headers, rows) {
+  const warnings = [], results = [], categorical = [], excluded = [], cols = [];
+  for (let c = 0; c < headers.length; c++) {
+    try {
+      const r = analyzeColumn(headers[c], c, rows, warnings, state.types[headers[c]]);
+      cols.push(r); (r.type === 'numeric' ? results : r.type === 'categorical' ? categorical : excluded).push(r);
+    } catch (e) { warnings.push(`“${headers[c]}” could not be analyzed and was skipped.`); }
+    if (c % CONFIG.CHUNK === CONFIG.CHUNK - 1) {
+      setStatus(`Analyzing variables… ${c + 1} of ${headers.length}`);
+      await new Promise(r => setTimeout(r));
+    }
+  }
+  return { results, categorical, excluded, cols, warnings };
+}
+
+// ---------- Loading ----------
+function setStatus(msg) { $('status').textContent = msg; }
+function showError(msg) { const e = $('error'); e.textContent = msg; e.hidden = !msg; }
+
+function suggestPatientId(headers, rows) {
+  const namePattern = /(^|[^a-z])(patient\s*id|patientid|mrn|medical\s*record|subject\s*id|participant\s*id|record\s*id|case\s*id)([^a-z]|$)/i;
+  for (let i = 0; i < headers.length; i++) {
+    if (!namePattern.test(headers[i])) continue;
+    const values = rows.map(row => (row[i] ?? '').trim()).filter(value => value && !MISSING.has(value.toLowerCase()));
+    if (values.length && new Set(values).size / values.length >= 0.85) return { name: headers[i], unique: new Set(values).size, count: values.length };
+  }
+  return null;
+}
+
+function askPatientId(headers, rows) {
+  const dialog = $('patientPrompt'), select = $('patientColumn');
+  select.innerHTML = '<option value="">Choose a column…</option>' + headers.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('');
+  const suggestion = suggestPatientId(headers, rows);
+  $('patientSuggestion').hidden = !suggestion;
+  $('patientSuggestion').textContent = suggestion ? `Possible patient ID: “${suggestion.name}” (${suggestion.unique} unique non-missing values). Select it if appropriate. Nothing is excluded until you choose the column and confirm.` : '';
+  $('patientYes').disabled = true;
+  dialog.showModal();
+  return new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'yes' ? select.value : ''), { once: true }));
+}
+
+function chooseWorksheet(sheetNames) {
+  if (sheetNames.length === 1) return Promise.resolve(sheetNames[0]);
+  const dialog = $('sheetPrompt'), select = $('sheetChoice');
+  select.innerHTML = sheetNames.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
+  dialog.showModal();
+  return new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'choose' ? select.value : null), { once: true }));
+}
+
+async function loadText(text, name, options = {}) {
+  showError(''); setStatus('Reading file…');
+  await new Promise(r => setTimeout(r));
+  try {
+    const { rows: all, unterminatedQuote } = parseCSV(text);
+    if (!all.length) throw new Error('The file is empty.');
+    if (all.length === 1) throw new Error('The file contains only a header row and no data.');
+    const headers = uniqueNames(all[0]);
+    const rows = all.slice(1);
+    const warnings = [];
+    if (unterminatedQuote) warnings.push('The file ends inside an unclosed quote; the last row may be malformed.');
+    const ragged = rows.filter(r => r.length !== headers.length).length;
+    if (ragged) warnings.push(`${ragged} row(s) had a different number of cells than the header; missing cells were treated as empty and extras ignored.`);
+    const dup = rows.length - new Set(rows.map(r => r.join('\u0001'))).size;
+    if (dup) warnings.push(`${dup} duplicate row(s) found; none were removed.`);
+    const patientId = options.skipPatientPrompt ? '' : await askPatientId(headers, rows);
+    if (!options.skipPatientPrompt) setStatus('Choose whether to exclude a patient ID column…');
+    state.patientId = patientId;
+    state.types = {}; state.choices = {};
+    if (patientId) {
+      state.types[patientId] = 'exclude';
+      // Patient ID exclusion warning box disabled by request:
+      // warnings.push(`“${patientId}” was identified as a patient ID and excluded from analysis.`);
+    }
+    state.t1 = { group: '', overall: true, skip: new Set(), selected: new Set(headers.filter(h => h !== patientId)), catChoices: {} };
+    state.expandedCategoricals = new Set();
+    const a = await analyzeAll(headers, rows);
+    Object.assign(state, { baseWarnings: warnings, excluded: a.excluded, cols: a.cols, fileName: name, headers, rows, results: a.results, categorical: a.categorical, sortKey: null, sortDir: 1 });
+    state.fig = null; state.view = 'home';
+    renderAll([...warnings, ...a.warnings]);
+    /* Patient ID warning banner disabled by request:
+    if (patientId) {
+      $('patientNotice').textContent = `Patient ID column “${patientId}” is excluded from summaries and figures. It is hidden in the data preview and is not included in Table 1.`;
+      $('patientNotice').hidden = false;
+    } else { $('patientNotice').hidden = true; $('patientNotice').textContent = ''; }
+    */
+    showView('home');
+    setStatus('');
+  } catch (e) {
+    setStatus(''); showError(`Could not read this file: ${e.message}`);
+  }
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  if (/\.csv$/i.test(file.name) || /csv/i.test(file.type)) {
+    try { await loadText(await file.text(), file.name); }
+    catch (e) { showError('The file could not be read.'); }
+    return;
+  }
+  if (/\.(xlsx|xls|xlsm|xlsb)$/i.test(file.name)) {
+    setStatus('Opening Excel workbook…'); showError('');
+    try {
+      const XLSX = await loadSheetJS();
+      const workbook = XLSX.read(await file.arrayBuffer());
+      if (!workbook.SheetNames.length) throw new Error('The workbook does not contain a worksheet.');
+      const sheetName = await chooseWorksheet(workbook.SheetNames);
+      if (!sheetName) { setStatus(''); return; }
+      const matrix = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, raw: false, defval: '', blankrows: false });
+      const csv = matrix.map(row => row.map(value => {
+        const cell = String(value ?? '');
+        return /[",\r\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell;
+      }).join(',')).join('\r\n');
+      await loadText(csv, file.name);
+    } catch (e) {
+      setStatus(''); showError(`Could not read this Excel file: ${e.message}`);
+    }
+    return;
+  }
+  showError('Please choose a CSV file or an Excel workbook (.xlsx, .xls, .xlsm, or .xlsb).');
+}
+
+// ---------- Rendering ----------
+function renderAll(warnings) {
+  if ($('results').hidden) fadeHide($('landing'), () => { fadeShow($('results')); const h = $('home').querySelector('[data-h]'); if (h) h.focus(); });
+  $('fname').textContent = state.fileName;
+  $('fstats').innerHTML = [['Rows', state.rows.length], ['Columns', state.headers.length], ['Numeric', state.results.length], ['Categorical', state.categorical.length], ['Excluded', state.excluded.length]]
+    .map(([k, v]) => `<div><dt>${k}</dt><dd>${v.toLocaleString()}</dd></div>`).join('');
+  const w = $('warnings');
+  w.hidden = !warnings.length;
+  w.innerHTML = warnings.length ? `<strong>Notes</strong><ul>${warnings.slice(0, 30).map(x => `<li>${esc(x)}</li>`).join('')}${warnings.length > 30 ? `<li>…and ${warnings.length - 30} more.</li>` : ''}</ul>` : '';
+  renderPreview(); renderTable(); renderCategorical(); renderTypes(); fillGroupSelect(); renderT1(); figRefresh();
+}
+
+function renderPreview() {
+  const rows = state.rows.slice(0, CONFIG.PREVIEW_ROWS);
+  const cols = state.headers.map((h, i) => [h, i]).filter(([h]) => h !== state.patientId);
+  $('preview').innerHTML = `<thead><tr>${cols.map(([h]) => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${
+    rows.map(r => `<tr>${cols.map(([, i]) => `<td>${esc(r[i] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>`;
+}
+
+function getView() {
+  let v = state.cols.filter(r => r.type !== 'excluded');
+  const k = state.sortKey;
+  if (k) v = [...v].sort((a, b) => {
+    const av = k === 'name' ? a.name : k === 'n' ? (a.type === 'numeric' ? a.n : a.nonMissing) : k === 'missingPct' ? a.missingPct : a.type === 'numeric' ? a.method : (state.t1.catChoices[a.name] || 'auto');
+    const bv = k === 'name' ? b.name : k === 'n' ? (b.type === 'numeric' ? b.n : b.nonMissing) : k === 'missingPct' ? b.missingPct : b.type === 'numeric' ? b.method : (state.t1.catChoices[b.name] || 'auto');
+    return (k === 'name' || k === 'method' ? String(av).localeCompare(String(bv), undefined, { numeric: true }) : av - bv) * state.sortDir;
+  });
+  return v;
+}
+
+// Apply a user choice ('auto' | 'Mean (SD)' | 'Median (IQR)') to one variable
+function setMethod(r, choice) {
+  r.choice = choice; state.choices[r.name] = choice;
+  r.method = choice === 'auto' ? r.autoMethod : choice;
+}
+function methodSelect(r) {
+  const opt = (v, label) => `<option value="${v}"${r.choice === v ? ' selected' : ''}>${label}</option>`;
+  return `<select class="method" data-name="${esc(r.name)}" aria-label="Summary method for ${esc(r.name)}">
+    ${opt('auto', `Auto: ${r.autoMethod}`)}${opt('Mean (SD)', 'Mean (SD)')}${opt('Median (IQR)', 'Median (IQR)')}</select>`;
+}
+
+function categoricalMode(r) { const choice = state.t1.catChoices[r.name] || 'auto'; return choice === 'auto' ? 'counts_percentage' : choice; }
+function categoricalLevels(r) {
+  const mode = categoricalMode(r), levels = [...r.freq].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, { numeric: true }));
+  return levels.map(([label, n]) => {
+    const pct = r.nonMissing ? (100 * n / r.nonMissing).toFixed(1) + '%' : '—';
+    const value = mode === 'counts' ? String(n) : mode === 'percentage' ? pct : `${n} (${pct})`;
+    return `${label}: ${value}`;
+  });
+}
+function categoricalValue(r) { return categoricalLevels(r).join('; ') || '—'; }
+function summaryValue(r) { return r.type === 'numeric' ? summaryText(r) : categoricalValue(r); }
+function summaryCell(r) {
+  if (r.type === 'numeric') return esc(summaryText(r));
+  const levels = categoricalLevels(r);
+  if (!levels.length) return '—';
+  const expanded = state.expandedCategoricals.has(r.name), shown = expanded ? levels : levels.slice(0, 8);
+  const toggle = levels.length > 8 ? `<button type="button" class="btn cat-expand" data-expand-cat="${esc(r.name)}" aria-expanded="${expanded}">${expanded ? 'Show fewer' : `Show all (${levels.length})`}</button>` : '';
+  return `${shown.map(esc).join('<br>')}${toggle}`;
+}
+function categoryMethodSelect(r) {
+  const choice = state.t1.catChoices[r.name] || 'auto';
+  const options = [['auto', 'Auto: Counts (percentage)'], ['counts', 'Counts'], ['percentage', 'Percentage'], ['counts_percentage', 'Counts (percentage)']];
+  return `<select class="method" data-cat-method="${esc(r.name)}" aria-label="Summary format for ${esc(r.name)}">${options.map(([v, label]) => `<option value="${v}"${choice === v ? ' selected' : ''}>${label}</option>`).join('')}</select>`;
+}
+
+function renderTable() {
+  const view = getView();
+  $('stats').querySelector('tbody').innerHTML = view.length ? view.map(r => `<tr${r.type === 'numeric' ? ' tabindex="0"' : ''} data-name="${esc(r.name)}" data-type="${r.type}"${r.type === 'numeric' ? ` aria-label="Details for ${esc(r.name)}"` : ''}>
+    <td>${esc(r.name)}</td><td class="num">${(r.type === 'numeric' ? r.n : r.nonMissing).toLocaleString()}</td><td class="num">${missingText(r)}</td><td class="summary-cell">${summaryCell(r)}</td><td>${r.type === 'numeric' ? methodSelect(r) : categoryMethodSelect(r)}</td></tr>`).join('')
+    : `<tr><td colspan="5">No summary variables are available.</td></tr>`;
+  document.querySelectorAll('#stats th[aria-sort]').forEach(th => {
+    const b = th.querySelector('button');
+    th.setAttribute('aria-sort', b && b.dataset.sort === state.sortKey ? (state.sortDir === 1 ? 'ascending' : 'descending') : 'none');
+  });
+  updateScope(view.length);
+}
+
+// Make the scope of global settings and exports explicit when a filter is active
+function updateScope(shown) {
+  const n = state.results.length, c = state.categorical.length;
+  $('scope').textContent = `Continuous settings apply to all ${n} numeric variable${n === 1 ? '' : 's'}; categorical settings apply to all ${c} categorical variable${c === 1 ? '' : 's'}.`;
+  $('exportScope').textContent = '';
+}
+
+
+
+function showDetail(name) {
+  const r = state.results.find(x => x.name === name);
+  if (!r) return;
+
+  const d = Math.max(decimalsFor(r), 1);
+  const f = x => fmt(x, d);
+
+  const rowsData = [
+    ['N', r.n.toLocaleString()],
+    ['Missing', missingText(r)],
+    ['Mean', f(r.mean)],
+    ['SD', f(r.sd)],
+    ['Median', f(r.median)],
+    ['Q1', f(r.q1)],
+    ['Q3', f(r.q3)],
+    ['IQR', f(r.iqr)],
+    ['Minimum', f(r.min)],
+    ['Maximum', f(r.max)],
+    ['Skewness', fmt(r.skew, 2)],
+    ['Selected summary', r.method + (r.choice === 'auto' ? ' (auto)' : ' (manual)')],
+    ['Auto-suggested', r.autoMethod]
+  ];
+
+  $('dtitle').textContent = r.name;
+
+  $('dbody').innerHTML = rowsData
+    .map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`)
+    .join('');
+
+  $('detail').showModal();
+
+  // Draw after dialog becomes visible
+  requestAnimationFrame(() => drawBoxPlot(r));
+}
+
+// ---------- Box & Whisker Plot ----------
+
+function drawBoxPlot(r) {
+  const canvas = $('boxplot');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+
+  // Account for high-DPI displays
+  const cssWidth = 700;
+  const cssHeight = 280;
+  const dpr = window.devicePixelRatio || 1;
+
+  canvas.width = cssWidth * dpr;
+  canvas.height = cssHeight * dpr;
+  canvas.style.width = '100%';
+  canvas.style.height = 'auto';
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+  const left = 55;
+  const right = 25;
+  const top = 35;
+  const bottom = 55;
+  const plotWidth = cssWidth - left - right;
+  const y = 125;
+  const boxHeight = 70;
+
+  const values = [
+    r.min,
+    r.q1,
+    r.median,
+    r.q3,
+    r.max
+  ];
+
+  const min = r.min;
+  const max = r.max;
+
+  // Handle constant variables
+  let range = max - min;
+  if (range === 0) range = 1;
+
+  const x = value =>
+    left + ((value - min) / range) * plotWidth;
+
+  // Background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, cssWidth, cssHeight);
+
+  // Title
+  ctx.fillStyle = '#1d2430';
+  ctx.font = '600 15px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Box plot (whiskers span min to max; no outlier rule)', cssWidth / 2, 20);
+
+  // Axis
+  ctx.strokeStyle = '#aab3bf';
+  ctx.lineWidth = 1;
+
+  ctx.beginPath();
+  ctx.moveTo(left, y + boxHeight / 2);
+  ctx.lineTo(left + plotWidth, y + boxHeight / 2);
+  ctx.stroke();
+
+  // Whisker line
+  const xMin = x(r.min);
+  const xQ1 = x(r.q1);
+  const xMed = x(r.median);
+  const xQ3 = x(r.q3);
+  const xMax = x(r.max);
+
+  ctx.strokeStyle = '#1f4e79';
+  ctx.lineWidth = 2;
+
+  // Main whisker
+  ctx.beginPath();
+  ctx.moveTo(xMin, y + boxHeight / 2);
+  ctx.lineTo(xQ1, y + boxHeight / 2);
+  ctx.moveTo(xQ3, y + boxHeight / 2);
+  ctx.lineTo(xMax, y + boxHeight / 2);
+  ctx.stroke();
+
+  // Minimum whisker cap
+  ctx.beginPath();
+  ctx.moveTo(xMin, y + 15);
+  ctx.lineTo(xMin, y + boxHeight - 15);
+  ctx.stroke();
+
+  // Maximum whisker cap
+  ctx.beginPath();
+  ctx.moveTo(xMax, y + 15);
+  ctx.lineTo(xMax, y + boxHeight - 15);
+  ctx.stroke();
+
+  // IQR box
+  ctx.fillStyle = '#eef3f8';
+  ctx.strokeStyle = '#1f4e79';
+  ctx.lineWidth = 2;
+
+  ctx.fillRect(
+    xQ1,
+    y,
+    Math.max(xQ3 - xQ1, 1),
+    boxHeight
+  );
+
+  ctx.strokeRect(
+    xQ1,
+    y,
+    Math.max(xQ3 - xQ1, 1),
+    boxHeight
+  );
+
+  // Median
+  ctx.strokeStyle = '#1d2430';
+  ctx.lineWidth = 3;
+
+  ctx.beginPath();
+  ctx.moveTo(xMed, y);
+  ctx.lineTo(xMed, y + boxHeight);
+  ctx.stroke();
+
+  // Determine sensible axis tick values
+  const tickCount = 5;
+  const d = decimalsFor(r);
+
+  ctx.font = '12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+  ctx.fillStyle = '#5b6573';
+  ctx.textAlign = 'center';
+
+  for (let i = 0; i <= tickCount; i++) {
+    const value = min + (max - min) * (i / tickCount);
+    const px = x(value);
+
+    // Tick
+    ctx.strokeStyle = '#d9dee5';
+    ctx.lineWidth = 1;
+
+    ctx.beginPath();
+    ctx.moveTo(px, y + boxHeight + 5);
+    ctx.lineTo(px, y + boxHeight + 11);
+    ctx.stroke();
+
+    // Label
+    ctx.fillStyle = '#5b6573';
+    ctx.fillText(fmt(value, d), px, y + boxHeight + 29);
+  }
+
+  // Labels beneath the plot
+  ctx.font = '600 11px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
+  const labelY = y + boxHeight + 48;
+
+  ctx.fillStyle = '#5b6573';
+
+  ctx.fillText('Min', xMin, labelY);
+  ctx.fillText('Q1', xQ1, labelY);
+  ctx.fillText('Median', xMed, labelY);
+  ctx.fillText('Q3', xQ3, labelY);
+  ctx.fillText('Max', xMax, labelY);
+}
+
+// ---------- Export ----------
+const tableRows = () => [['Variable', 'N', 'Missing', 'Summary', 'Summary method'],
+  ...getView().map(r => [safe(r.name), r.type === 'numeric' ? r.n : r.nonMissing, missingText(r), safe(summaryValue(r)), r.type === 'numeric' ? r.method : (({ auto: 'Auto: Counts (percentage)', counts: 'Counts', percentage: 'Percentage', counts_percentage: 'Counts (percentage)' })[state.t1.catChoices[r.name] || 'auto'])])];
+const csvCell = v => /[",\n\r]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+
+async function copyText(text, okMsg) {
+  if (!text) { setStatus('Nothing to copy.'); return; }
+  let ok = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); ok = true; }
+  } catch (_) { ok = false; }
+  if (!ok) { // fallback for insecure contexts or denied permission
+    const t = document.createElement('textarea');
+    t.value = text; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(t); t.select();
+    try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+    t.remove();
+  }
+  setStatus(ok ? okMsg : 'Copy failed. Use Export → Download CSV instead.');
+}
+function download(text, filename, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const baseName = () => (state.fileName.replace(/\.(csv|xlsx|xls|xlsm|xlsb)$/i, '') || 'data') + '_descriptive_stats';
+
+// ---------- Sample data (entirely synthetic) ----------
+function sampleCSV() {
+  let seed = 20240607;
+  const rand = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const norm = (m, s) => m + s * Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
+  const maybe = (v, p) => rand() < p ? (rand() < 0.5 ? '' : 'NA') : v;
+  const lines = ['Age,BMI,Hemoglobin,CRP,Albumin,Length_of_stay,Disease_duration,Sex,Diagnosis,Disease_activity,Smoking_status,Diabetes,Hypertension,Treatment'];
+  for (let i = 0; i < 240; i++) {
+    lines.push([
+      Math.max(18, Math.round(norm(54, 12))),
+      maybe(Math.max(14, norm(27, 4.5)).toFixed(1), 0.03),
+      maybe(norm(13.1, 1.6).toFixed(1), 0.02),
+      maybe(Math.exp(norm(1.2, 1.1)).toFixed(1), 0.08),
+      maybe(Math.min(5, norm(3.8, 0.45)).toFixed(1), 0.05),
+      Math.max(1, Math.round(Math.exp(norm(1.5, 0.8)))),
+      maybe(Math.exp(norm(1.6, 0.9)).toFixed(1), 0.04),
+      rand() < 0.48 ? 'Male' : 'Female',
+      rand() < 0.55 ? "Crohn's disease" : 'Ulcerative colitis',
+      (() => { const p = rand(); return p < 0.2 ? 'Remission' : p < 0.45 ? 'Mild' : p < 0.8 ? 'Moderate' : 'Severe'; })(),
+      (() => { const p = rand(); return p < 0.62 ? 'Never' : p < 0.82 ? 'Former' : 'Current'; })(),
+      rand() < 0.14 ? 'Yes' : 'No',
+      rand() < 0.28 ? 'Yes' : 'No',
+      (() => { const p = rand(); return p < 0.42 ? 'Standard therapy' : p < 0.82 ? 'Biologic' : 'Combination therapy'; })()
+    ].join(','));
+  }
+  return lines.join('\n');
+}
+
+
+// ---------- Variable types, categorical frequencies, Table 1 ----------
+const safe = s => /^\s*[=+\-@]/.test(String(s)) ? `'${s}` : String(s);   // export-only guard against spreadsheet formula injection
+const tsvCell = v => String(v).replace(/[\t\r\n]+/g, ' ');
+
+async function reanalyze() {
+  setStatus('Recalculating…');
+  const a = await analyzeAll(state.headers, state.rows);
+  Object.assign(state, { results: a.results, categorical: a.categorical, excluded: a.excluded, cols: a.cols });
+  a.results.forEach(r => setMethod(r, state.choices[r.name] || 'auto'));
+  renderAll([...state.baseWarnings, ...a.warnings]);
+  setStatus('Variable types updated.');
+}
+
+function renderTypes() {
+  const f = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.tname : null;
+  const opts = c => [['auto', 'Auto'], ['numeric', 'Numeric'], ['categorical', 'Categorical'], ['exclude', 'Exclude']]
+    .map(([v, l]) => `<option value="${v}"${(state.types[c.name] || 'auto') === v ? ' selected' : ''}>${l}</option>`).join('');
+  $('types').innerHTML = `<thead><tr><th scope="col">Variable</th><th scope="col">Current</th><th scope="col">Type</th><th scope="col">In Table 1</th></tr></thead><tbody>${
+    state.cols.map(c => `<tr><td>${esc(c.name)}</td><td>${c.empty ? 'Empty (skipped)' : c.type === 'excluded' ? 'Excluded' : c.type}</td><td><select class="method" data-tname="${esc(c.name)}" aria-label="Type of ${esc(c.name)}">${opts(c)}</select></td><td><input type="checkbox" data-t1="${esc(c.name)}" aria-label="Include ${esc(c.name)} in Table 1"${state.t1.skip.has(c.name) ? '' : ' checked'}${c.type === 'excluded' ? ' disabled' : ''}></td></tr>`).join('')}</tbody>`;
+  if (f) { const el = [...$('types').querySelectorAll('select')].find(e => e.dataset.tname === f); if (el) el.focus(); }
+}
+
+function freqTable(v) {
+  const rows = [...v.freq].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, { numeric: true }));
+  const wrap = document.createElement('div'), box = document.createElement('div'), tbl = document.createElement('table'), note = document.createElement('p'), btn = document.createElement('button');
+  box.className = 'tablewrap'; note.className = 'note'; btn.type = 'button'; btn.className = 'btn'; box.append(tbl); wrap.append(box, note, btn);
+  const draw = limit => {
+    tbl.innerHTML = `<thead><tr><th scope="col">Category</th><th scope="col" class="num">n (%)</th></tr></thead><tbody>${rows.slice(0, limit).map(([k, n]) =>
+      `<tr><td>${esc(k)}</td><td class="num">${n.toLocaleString()} (${(100 * n / v.nonMissing).toFixed(1)}%)</td></tr>`).join('')}</tbody>`;
+    const hidden = Math.max(0, rows.length - limit);
+    note.textContent = `Denominator: ${v.nonMissing.toLocaleString()} non-missing; ${v.missing.toLocaleString()} missing excluded.${hidden ? ` Showing ${limit} of ${rows.length} levels.` : ''}`;
+    btn.hidden = !hidden; btn.textContent = `Show all ${rows.length} levels`;
+  };
+  btn.addEventListener('click', () => draw(Infinity)); draw(CONFIG.FREQ_LIMIT);
+  return wrap;
+}
+
+function renderCategorical() {
+  const c = state.categorical, q = $('catsearch').value.trim().toLowerCase(), box = $('cat');
+  $('catinfo').textContent = `${c.length} categorical, ${state.results.length} numeric, ${state.excluded.length} excluded. Labels are trimmed and case-sensitive; missing values are shown separately.`;
+  box.replaceChildren();
+  c.filter(v => !q || v.name.toLowerCase().includes(q)).forEach(v => {
+    const d = document.createElement('details'), s = document.createElement('summary');
+    s.textContent = `${v.name}: ${v.unique.toLocaleString()} level${v.unique === 1 ? '' : 's'}, ${v.missing.toLocaleString()} missing (${v.missingPct.toFixed(1)}%)`;
+    d.append(s);
+    d.addEventListener('toggle', () => { if (d.open && !d.dataset.done) { d.dataset.done = '1'; d.append(freqTable(v)); } });
+    box.append(d);
+  });
+  if (!box.children.length) box.textContent = c.length ? 'No variables match your search.' : 'No categorical variables.';
+}
+
+function fillGroupSelect() {
+  if (!state.categorical.some(c => c.name === state.t1.group)) state.t1.group = '';
+  $('t1group').innerHTML = '<option value="">None</option>' + state.categorical.map(c => `<option value="${esc(c.name)}"${c.name === state.t1.group ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+  const selectable = state.headers.filter(name => name !== state.patientId);
+  $('t1variables').innerHTML = selectable.map(name => `<label class="t1-variable"><input type="checkbox" data-t1-variable="${esc(name)}"${state.t1.selected.has(name) ? ' checked' : ''}><span>${esc(name)}</span></label>`).join('');
+  $('t1variablesLabel').textContent = `Select variables (${state.t1.selected.size}/${selectable.length})`;
+  renderCategoricalSettings();
+}
+
+function renderCategoricalSettings() {
+  const options = [['auto', 'Auto: Counts (percentage)'], ['counts', 'Counts'], ['percentage', 'Percentage'], ['counts_percentage', 'Counts (percentage)']];
+  $('catSettings').innerHTML = state.categorical.map(r => '<label class="cat-setting"><span>' + esc(r.name) + '</span><select class="method" data-cat-method="' + esc(r.name) + '" aria-label="Summary format for ' + esc(r.name) + '">' + options.map(([v, label]) => '<option value="' + v + '"' + ((state.t1.catChoices[r.name] || 'auto') === v ? ' selected' : '') + '>' + label + '</option>').join('') + '</select></label>').join('') || '<p class="note">No categorical variables were detected.</p>';
+}
+
+function buildTable1() {
+  const all = [...Array(state.rows.length).keys()], g = state.categorical.find(c => c.name === state.t1.group);
+  const nat = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+  const sets = [], notes = [`N = number of rows${g ? `; columns are levels of “${g.name}”` : ''}. No significance tests are reported.`];
+  if (!g || state.t1.overall) sets.push({ label: 'Overall', idx: all });
+  if (g) {
+    [...g.freq.keys()].sort(nat).forEach(k => sets.push({ label: k, idx: all.filter(i => g.labels[i] === k) }));
+    const miss = all.filter(i => g.labels[i] === null);
+    if (miss.length) { sets.push({ label: 'Missing group', idx: miss }); notes.push(`${miss.length} row(s) have a missing “${g.name}” value; they appear under “Missing group” and are included in Overall.`); }
+  }
+  const rows = [['N', ...sets.map(s => s.idx.length.toLocaleString())]];
+  let capped = 0;
+  for (const c of state.cols) {
+    if (c.type === 'excluded' || state.t1.skip.has(c.name) || !state.t1.selected.has(c.name) || c === g) continue;
+    if (c.type === 'numeric') {
+      const d = decimalsFor(c);
+      rows.push([`${c.name}, ${c.method === 'Mean (SD)' ? 'mean (SD)' : 'median (IQR)'}`, ...sets.map(s => {
+        const v = s.idx.map(i => c.nums[i]).filter(x => x !== null);
+        return v.length ? fmtSummary(computeStats(v), c.method, d) : '—'; })]);
+    } else {
+      const mode = state.t1.catChoices[c.name] === 'counts' || state.t1.catChoices[c.name] === 'percentage' || state.t1.catChoices[c.name] === 'counts_percentage' ? state.t1.catChoices[c.name] : 'counts_percentage';
+      const label = mode === 'counts' ? 'counts' : mode === 'percentage' ? 'percentage' : 'counts (percentage)';
+      rows.push([`${c.name}, ${label}`, ...sets.map(() => '')]);
+      const cnt = sets.map(s => { const m = new Map(); let den = 0; for (const i of s.idx) { const l = c.labels[i]; if (l !== null) { m.set(l, (m.get(l) || 0) + 1); den++; } } return { m, den }; });
+      const lv = [...c.freq].sort((a, b) => b[1] - a[1] || nat(a[0], b[0]));
+      if (lv.length > CONFIG.T1_MAX_LEVELS) { capped++; rows.push([`  ${lv.length} levels (not listed)`, ...sets.map(() => '')]); }
+      else lv.forEach(([k]) => rows.push([`  ${k}`, ...cnt.map(x => { const n = x.m.get(k) || 0, pct = x.den ? (100 * n / x.den).toFixed(1) + '%' : '—'; return mode === 'counts' ? String(n) : mode === 'percentage' ? pct : x.den ? `${n} (${pct})` : '—'; })]));
+    }
+    const col = c.type === 'numeric' ? c.nums : c.labels;
+    const ms = sets.map(s => s.idx.reduce((k, i) => k + (col[i] === null ? 1 : 0), 0));
+    if (ms.some(Boolean)) rows.push(['  Missing', ...ms.map(String)]);
+  }
+  notes.push('Continuous: mean (SD) or median (IQR) as selected under Summary (Auto is a heuristic, not a normality test). Categorical: counts, percentages of non-missing values, or both as selected under Summary settings (Auto defaults to counts and percentages). Statistics use available observations; missing values are never treated as zero. Non-numeric entries in numeric variables are counted as missing.');
+  if (capped) notes.push(`${capped} categorical variable(s) with more than ${CONFIG.T1_MAX_LEVELS} levels are not listed; see Categorical variables.`);
+  return { header: ['Characteristic', ...sets.map(s => s.label)], rows, notes };
+}
+
+function renderT1() {
+  $('t1overall').disabled = !state.t1.group;
+  $('t1variablesLabel').textContent = `Select variables (${state.t1.selected.size}/${state.headers.filter(name => name !== state.patientId).length})`;
+  const t = buildTable1();
+  $('t1').innerHTML = `<thead><tr>${t.header.map((h, i) => `<th scope="col"${i ? ' class="num"' : ''}>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
+    t.rows.map(r => `<tr>${r.map((v, i) => `<td class="${i ? 'num' : r[0].startsWith('  ') ? 'ind' : ''}">${esc(v.trim())}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  $('t1notes').innerHTML = t.notes.map(x => `<li>${esc(x)}</li>`).join('');
+}
+const t1Matrix = () => { const t = buildTable1(); return [t.header.map(safe), ...t.rows.map(r => [safe(r[0]), ...r.slice(1)]), [''], ...t.notes.map(x => [x])]; };
+
+function initExtra() {
+  document.addEventListener('click', e => {
+    document.querySelectorAll('details.menu[open]').forEach(menu => { if (!menu.contains(e.target)) menu.open = false; });
+    const v = e.target.closest('[data-view]'), t = e.target.closest('[data-fig]');
+    if (v) showView(v.dataset.view);
+    else if (t) { state.fig.type = t.dataset.fig; figRefresh(); if (state.view !== 'figures') return; }
+  });
+  $('figctl').addEventListener('input', e => { const k = e.target.dataset.f; if (!k) return; state.fig[k] = k === 'bins' ? (Math.floor(+e.target.value) || 0) : e.target.value; figDraw(); });
+  $('figreset').addEventListener('click', () => { state.fig = null; figRefresh(); });
+  $('figsvg').addEventListener('click', () => figCur && download(figCur.svg, figName('svg'), 'image/svg+xml'));
+  $('figpng').addEventListener('click', figPng);
+  $('figpdf').addEventListener('click', figPdf);
+  $('dlDocx').addEventListener('click', () => exportDocx(summaryDocx, baseName() + '.docx'));
+  $('t1docx').addEventListener('click', () => exportDocx(table1Docx, baseName().replace('_descriptive_stats', '_table1') + '.docx'));
+  $('types').addEventListener('change', async e => {
+    const s = e.target.closest('select[data-tname]'), cb = e.target.closest('input[data-t1]');
+    if (s) { if (s.value === 'auto') delete state.types[s.dataset.tname]; else state.types[s.dataset.tname] = s.value; await reanalyze(); }
+    else if (cb) { if (cb.checked) state.t1.skip.delete(cb.dataset.t1); else state.t1.skip.add(cb.dataset.t1); renderT1(); }
+  });
+  $('t1group').addEventListener('change', e => { state.t1.group = e.target.value; renderT1(); });
+  $('t1variables').addEventListener('change', e => {
+    const input = e.target.closest('[data-t1-variable]'); if (!input) return;
+    if (input.checked) state.t1.selected.add(input.dataset.t1Variable); else state.t1.selected.delete(input.dataset.t1Variable);
+    renderT1();
+  });
+  $('catSettings').addEventListener('change', e => {
+    const sel = e.target.closest('[data-cat-method]'); if (!sel) return;
+    state.t1.catChoices[sel.dataset.catMethod] = sel.value;
+    renderCategoricalSettings(); renderTable(); renderT1();
+  });
+  $('t1selectAll').addEventListener('click', () => { state.t1.selected = new Set(state.headers.filter(name => name !== state.patientId)); fillGroupSelect(); renderT1(); });
+  $('t1selectNone').addEventListener('click', () => { state.t1.selected.clear(); fillGroupSelect(); renderT1(); });
+  $('t1overall').addEventListener('change', e => { state.t1.overall = e.target.checked; renderT1(); });
+  $('catsearch').addEventListener('input', renderCategorical);
+  $('t1copy').addEventListener('click', () => copyText(t1Matrix().map(r => r.map(tsvCell).join('\t')).join('\n'), 'Table 1 copied (tab-separated).'));
+  $('t1csv').addEventListener('click', () => download(t1Matrix().map(r => r.map(csvCell).join(',')).join('\r\n'), baseName().replace('_descriptive_stats', '_table1') + '.csv', 'text/csv'));
+  $('stats').querySelector('tbody').addEventListener('change', renderT1);
+  document.querySelectorAll('[data-setall]').forEach(b => b.addEventListener('click', renderT1));
+}
+
+
+// ---------- Views & Figures (SVG generated from the loaded data; no charting library) ----------
+let figCur = null;
+const PAL = ['#1f4e79', '#E69F00', '#009E73', '#CC79A7', '#56B4E9', '#D55E00', '#999999'];   // Okabe-Ito based
+const FIGS = {
+  hist: { name: 'Histogram', info: 'Distribution of a numeric variable', needs: 'Numeric', icon: '<path d="M3 20V12h4v8M9 20V5h4v15M15 20V9h4v11"/>' },
+  box: { name: 'Box plot', info: 'Median, IQR, Tukey outliers; optional groups', needs: 'Numeric + optional categorical', icon: '<path d="M6 8h12v8H6zM12 8V3M12 16v5M6 12h12"/>' },
+  bar: { name: 'Bar chart', info: 'Category counts or percentages', needs: 'Categorical', icon: '<path d="M4 6h12M4 12h16M4 18h8"/>' },
+  scatter: { name: 'Scatter plot', info: 'Two numeric variables', needs: 'Two numeric + optional categorical', icon: '<circle cx="6" cy="17" r="1.5"/><circle cx="11" cy="11" r="1.5"/><circle cx="17" cy="14" r="1.5"/><circle cx="19" cy="6" r="1.5"/>' },
+  miss: { name: 'Missingness', info: 'Missing values per variable', needs: 'All variables', icon: '<path d="M4 5h16M4 10h10M4 15h6M4 20h13"/>' }
+};
+const tl = v => String(+Number(v).toPrecision(6));
+const cut = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
+const lin = (d0, d1, r0, r1) => v => r0 + (v - d0) / ((d1 - d0) || 1) * (r1 - r0);
+const numVar = n => state.results.find(r => r.name === n), catVar = n => state.categorical.find(r => r.name === n);
+const byFreq = c => [...c.freq].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, { numeric: true }));
+function niceTicks(lo, hi, n = 5) {
+  if (!(hi > lo)) return [lo];
+  const raw = (hi - lo) / n, p = 10 ** Math.floor(Math.log10(raw)), f = raw / p, step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p, out = [];
+  for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + step * 1e-9; v += step) out.push(+v.toPrecision(12));
+  return out;
+}
+const T = (x, y, s, a = 'middle', fill = '#1d2430', sz = 12) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="${sz}" fill="${fill}">${esc(s)}</text>`;
+const yAx = (d, sy, tk) => tk.map(v => `<line x1="${d.l}" x2="${d.W - d.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="#e3e7ec"/>${T(d.l - 6, sy(v) + 4, tl(v), 'end', '#5b6573', 11)}`).join('') + `<line x1="${d.l}" x2="${d.l}" y1="${d.t}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
+const xAx = (d, sx, tk) => tk.map(v => `<line x1="${sx(v)}" x2="${sx(v)}" y1="${d.H - d.b}" y2="${d.H - d.b + 5}" stroke="#5b6573"/>${T(sx(v), d.H - d.b + 18, tl(v), 'middle', '#5b6573', 11)}`).join('') + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
+function frame(d, inner, title, xl, yl, extra = '') {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${d.W} ${d.H}" width="${d.W}" height="${d.H}" font-family="system-ui, Arial, sans-serif" role="img" aria-label="${esc(title)}"><title>${esc(title)}</title><rect width="${d.W}" height="${d.H}" fill="#fff"/><text x="${d.W / 2}" y="22" text-anchor="middle" font-size="15" font-weight="600" fill="#1d2430">${esc(title)}</text>${extra}${inner}${T((d.l + d.W - d.r) / 2, d.H - 10, xl)}${yl ? `<text transform="translate(16 ${(d.t + d.H - d.b) / 2}) rotate(-90)" text-anchor="middle" font-size="12" fill="#1d2430">${esc(yl)}</text>` : ''}</svg>`;
+}
+const need = kind => ({ msg: (kind === 'cat' ? state.categorical : state.results).length ? 'Choose a variable.' : (kind === 'cat' ? 'No categorical variables were detected. Try a histogram, box plot or the missingness plot, or change a variable type under Tables → Variable types.' : 'No numeric variables were detected. Try a bar chart or the missingness plot, or change a variable type under Tables → Variable types.') });
+const done = (svg, d, desc) => ({ svg, w: d.W, h: d.H, desc });
+
+function figHist(f) {
+  const r = numVar(f.x); if (!r) return need('num');
+  const v = r.nums.filter(x => x !== null), constant = r.min === r.max;
+  const k = constant ? 1 : f.bins > 0 ? Math.min(100, f.bins) : Math.max(5, Math.min(40, Math.ceil(Math.log2(v.length) + 1)));   // Sturges default
+  const a = constant ? r.min - 0.5 : r.min, b = constant ? r.max + 0.5 : r.max, w = (b - a) / k, c = new Array(k).fill(0);
+  v.forEach(x => c[Math.min(k - 1, Math.floor((x - a) / w))]++);
+  const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 56 }, ymax = Math.max(...c), sx = lin(a, b, d.l, d.W - d.r), sy = lin(0, ymax, d.H - d.b, d.t);
+  const bars = c.map((n, i) => `<rect x="${sx(a + i * w) + 0.5}" y="${sy(n)}" width="${Math.max(0, sx(a + (i + 1) * w) - sx(a + i * w) - 1)}" height="${sy(0) - sy(n)}" fill="${PAL[0]}"/>`).join('');
+  return done(frame(d, yAx(d, sy, niceTicks(0, ymax)) + bars + xAx(d, sx, niceTicks(a, b)), `Distribution of ${cut(r.name, 50)}`, r.name, 'Frequency'), d,
+    `Histogram of ${r.name}: n = ${v.length} plotted; ${state.rows.length - v.length} missing or non-numeric excluded; ${k} bin${k === 1 ? '' : 's'} of width ${tl(w)}.`);
+}
+
+function figBox(f) {
+  const r = numVar(f.x); if (!r) return need('num');
+  const g = f.g ? catVar(f.g) : null; let excl = 0, hiddenObs = 0, hiddenLv = 0, groups;
+  if (g) {
+    const shown = byFreq(g).map(x => x[0]); hiddenLv = Math.max(0, shown.length - 12); shown.length = Math.min(12, shown.length);
+    groups = shown.map(k => ({ label: k, v: [] })); const ix = new Map(shown.map((k, i) => [k, i]));
+    r.nums.forEach((x, i) => { if (x === null) return; const l = g.labels[i]; if (l === null) excl++; else if (ix.has(l)) groups[ix.get(l)].v.push(x); else hiddenObs++; });
+  } else groups = [{ label: 'All', v: r.nums.filter(x => x !== null) }];
+  groups = groups.filter(x => x.v.length);
+  if (!groups.length) return { msg: 'No valid observations for this selection.' };
+  const all = groups.flatMap(x => x.v), lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo || 1) * 0.06;
+  const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 70 }, sy = lin(lo - pad, hi + pad, d.H - d.b, d.t), bw = (d.W - d.l - d.r) / groups.length, bx = Math.min(60, bw * 0.5);
+  const body = groups.map((G, i) => {
+    const s = computeStats(G.v), lf = s.q1 - 1.5 * s.iqr, hf = s.q3 + 1.5 * s.iqr, inside = G.v.filter(x => x >= lf && x <= hf), cx = d.l + (i + 0.5) * bw, col = PAL[g ? i % PAL.length : 0];
+    const wl = Math.min(...inside), wh = Math.max(...inside);
+    return `<g stroke="#1d2430" stroke-width="1.5"><line x1="${cx}" x2="${cx}" y1="${sy(wl)}" y2="${sy(s.q1)}"/><line x1="${cx}" x2="${cx}" y1="${sy(s.q3)}" y2="${sy(wh)}"/><line x1="${cx - bx / 4}" x2="${cx + bx / 4}" y1="${sy(wl)}" y2="${sy(wl)}"/><line x1="${cx - bx / 4}" x2="${cx + bx / 4}" y1="${sy(wh)}" y2="${sy(wh)}"/><rect x="${cx - bx / 2}" y="${sy(s.q3)}" width="${bx}" height="${Math.max(1, sy(s.q1) - sy(s.q3))}" fill="${col}" fill-opacity=".35"/><line x1="${cx - bx / 2}" x2="${cx + bx / 2}" y1="${sy(s.median)}" y2="${sy(s.median)}" stroke-width="3"/></g>`
+      + G.v.filter(x => x < lf || x > hf).map(x => `<circle cx="${cx}" cy="${sy(x)}" r="3" fill="none" stroke="#1d2430"/>`).join('')
+      + (g ? T(cx, d.H - d.b + 16, cut(G.label, 12), 'middle', '#1d2430', 11) : '') + T(cx, d.H - d.b + (g ? 30 : 16), `n=${G.v.length}`, 'middle', '#5b6573', 10);
+  }).join('');
+  const ax = yAx(d, sy, niceTicks(lo - pad, hi + pad)) + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
+  return done(frame(d, ax + body, g ? `${cut(r.name, 30)} by ${cut(g.name, 25)}` : cut(r.name, 60), g ? g.name : '', r.name), d,
+    `Box plot of ${r.name}${g ? ` by ${g.name}` : ''}: n = ${all.length} plotted. Box = Q1–Q3 (R type 7) with median line; whiskers reach the most extreme values within 1.5×IQR; circles beyond are outliers and are not removed. Excluded: ${r.nums.length - r.nums.filter(x => x !== null).length} missing/non-numeric${g ? `; ${excl} with missing group; ${hiddenObs} in ${hiddenLv} less frequent level(s) not shown (max 12 groups)` : ''}.`);
+}
+
+function figBar(f) {
+  const c = catVar(f.c); if (!c) return need('cat');
+  const lv = byFreq(c), shown = lv.slice(0, 15), hid = lv.length - shown.length, pct = f.mode === 'pct';
+  const d = { W: 640, H: 104 + 26 * shown.length, l: 140, r: 90, t: 40, b: 56 }, vals = shown.map(([, n]) => pct ? 100 * n / c.nonMissing : n), mx = Math.max(...vals), sx = lin(0, mx, d.l, d.W - d.r);
+  const bars = shown.map(([k, n], i) => { const y = d.t + 8 + i * 26, p = 100 * n / c.nonMissing; return T(d.l - 6, y + 14, cut(k, 20), 'end', '#1d2430', 11) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(vals[i]) - d.l)}" height="20" fill="${PAL[0]}"/>` + T(sx(vals[i]) + 4, y + 14, `${n} (${p.toFixed(1)}%)`, 'start', '#1d2430', 11); }).join('');
+  return done(frame(d, xAx(d, sx, niceTicks(0, mx)) + bars, cut(c.name, 60), pct ? `Percent of non-missing (n = ${c.nonMissing})` : 'Count', ''), d,
+    `Bar chart of ${c.name}: ${c.nonMissing} non-missing observations; ${c.missing} missing excluded from percentages.${hid ? ` Showing the 15 most frequent of ${lv.length} levels; ${hid} not shown.` : ''}`);
+}
+
+function figMiss() {
+  const n = state.rows.length;
+  const items = state.headers.map((h, c) => [h, c]).filter(([h]) => h !== state.patientId).map(([h, c]) => { let m = 0; for (const r of state.rows) if (MISSING.has((r[c] ?? '').trim().toLowerCase())) m++; return [h, m]; }).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const d = { W: 640, H: 104 + 22 * items.length, l: 150, r: 90, t: 40, b: 56 }, sx = lin(0, 100, d.l, d.W - d.r);
+  const bars = items.map(([h, m], i) => { const y = d.t + 8 + i * 22, p = 100 * m / n; return T(d.l - 6, y + 13, cut(h, 22), 'end', '#1d2430', 11) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(p) - d.l)}" height="16" fill="${PAL[0]}"/>` + T(sx(p) + 4, y + 12, `${m} (${p.toFixed(1)}%)`, 'start', '#1d2430', 11); }).join('');
+  return done(frame(d, xAx(d, sx, [0, 25, 50, 75, 100]) + bars, 'Missing values by variable', `Percent of ${n} rows missing`, ''), d,
+    `Missingness for ${items.length} variables (${n} rows), sorted by percent missing. Missing = blank, NA, N/A, NaN, null, missing, "." or "-".`);
+}
+
+function figScatter(f) {
+  const X = numVar(f.x), Y = numVar(f.y); if (!X || !Y) return need('num');
+  let g = f.g ? catVar(f.g) : null, note = '';
+  if (g && g.unique > 7) { note = ` Color-by “${g.name}” ignored (more than 7 levels).`; g = null; }
+  const lv = g ? byFreq(g).map(x => x[0]) : [], pts = []; let exclG = 0;
+  state.rows.forEach((_, i) => { const x = X.nums[i], y = Y.nums[i]; if (x === null || y === null) return; if (g && g.labels[i] === null) { exclG++; return; } pts.push([x, y, g ? lv.indexOf(g.labels[i]) : 0]); });
+  if (!pts.length) return { msg: 'No observations have valid values for both variables.' };
+  const rng = (a, b) => a === b ? [a - 1, b + 1] : [a - (b - a) * 0.04, b + (b - a) * 0.04];
+  const [x0, x1] = rng(Math.min(...pts.map(p => p[0])), Math.max(...pts.map(p => p[0]))), [y0, y1] = rng(Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[1])));
+  const d = { W: 640, H: 400, l: 62, r: 20, t: g ? 52 : 40, b: 56 }, sx = lin(x0, x1, d.l, d.W - d.r), sy = lin(y0, y1, d.H - d.b, d.t);
+  let lx = d.l; const leg = g ? lv.map((k, i) => { const s = `<circle cx="${lx + 5}" cy="36" r="4" fill="${PAL[i]}"/>${T(lx + 13, 40, cut(k, 14), 'start', '#1d2430', 11)}`; lx += 28 + Math.min(14, k.length) * 6; return s; }).join('') : '';
+  const dots = pts.map(p => `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="3" fill="${PAL[p[2]]}" fill-opacity=".65"/>`).join('');
+  return done(frame(d, yAx(d, sy, niceTicks(y0, y1)) + xAx(d, sx, niceTicks(x0, x1)) + dots, `${cut(Y.name, 28)} vs ${cut(X.name, 28)}`, X.name, Y.name, leg), d,
+    `Scatter plot: ${pts.length} of ${state.rows.length} observations shown (pairs with a missing or non-numeric X or Y excluded${g ? `; ${exclG} excluded for missing ${g.name}` : ''}). No trend line is fitted.${note}`);
+}
+
+function figRefresh() {
+  const num = state.results.map(r => r.name), cat = state.categorical.map(r => r.name);
+  const f = state.fig || (state.fig = { type: 'hist', x: '', y: '', c: '', g: '', bins: 0, mode: 'count' });
+  if (!num.includes(f.x)) f.x = num[0] || '';
+  if (!num.includes(f.y)) f.y = num[1] || num[0] || '';
+  if (!cat.includes(f.c)) f.c = cat[0] || '';
+  if (f.g && !cat.includes(f.g)) f.g = '';
+  $('figtypes').innerHTML = Object.entries(FIGS).map(([k, v]) => `<button type="button" class="figtype" data-fig="${k}" aria-pressed="${f.type === k}"><svg viewBox="0 0 24 24" aria-hidden="true">${v.icon}</svg><strong>${v.name}</strong><span>${v.info}</span><em>${v.needs}</em></button>`).join('');
+  const S = (id, label, list, val, none) => `<label for="fig${id}">${label}</label><select id="fig${id}" class="method" data-f="${id}">${none ? '<option value="">None</option>' : ''}${list.map(n => `<option value="${esc(n)}"${n === val ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
+  $('figctl').innerHTML = { hist: () => S('x', 'Variable', num, f.x) + `<label for="figbins">Bins</label><input id="figbins" data-f="bins" type="number" min="1" max="100" placeholder="Auto" value="${f.bins || ''}">`,
+    box: () => S('x', 'Variable', num, f.x) + S('g', 'Group by', cat, f.g, true), bar: () => S('c', 'Variable', cat, f.c) + `<label for="figmode">Show</label><select id="figmode" class="method" data-f="mode"><option value="count"${f.mode === 'count' ? ' selected' : ''}>Counts</option><option value="pct"${f.mode === 'pct' ? ' selected' : ''}>Percent</option></select>`,
+    miss: () => '', scatter: () => S('x', 'X', num, f.x) + S('y', 'Y', num, f.y) + S('g', 'Color by', cat, f.g, true) }[f.type]();
+  if (state.view === 'figures') figDraw();
+}
+function figDraw() {
+  const f = state.fig, out = { hist: figHist, box: figBox, bar: figBar, miss: figMiss, scatter: figScatter }[f.type](f);
+  figCur = out.svg ? out : null;
+  $('figplot').innerHTML = out.svg || `<p class="note">${esc(out.msg)}</p>`;
+  const p = $('figplot'); p.classList.remove('fade-soft'); void p.offsetWidth; p.classList.add('fade-soft');
+  $('figdesc').textContent = out.desc || '';
+  $('figsvg').disabled = $('figpng').disabled = $('figpdf').disabled = !figCur;
+}
+const figName = ext => baseName().replace('_descriptive_stats', '_fig_' + state.fig.type) + '.' + ext;
+function fadeShow(el) { el.hidden = false; el.classList.remove('fade-out'); el.classList.remove('fade-in'); void el.offsetWidth; el.classList.add('fade-in'); }
+function fadeHide(el, done) {
+  if (el.hidden) { if (done) done(); return; }
+  el.classList.add('fade-out');
+  setTimeout(() => { el.hidden = true; el.classList.remove('fade-out'); if (done) done(); }, 200);
+}
+// The workspace chooser (#home) stays visible; it shrinks into a switcher once a workspace is open.
+function showView(v) {
+  const prev = state.view;
+  if (prev === v && v !== 'home') return;
+  state.view = v;
+  $('home').classList.toggle('compact', v !== 'home');
+  document.querySelectorAll('.path').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+  if (v === 'home') { ['tables', 'figures'].forEach(k => { $(k).hidden = true; }); return; }
+  const open = () => { fadeShow($(v)); if (v === 'figures') figRefresh(); const h = $(v).querySelector('[data-h]'); if (h) h.focus({ preventScroll: true }); };
+  if (prev !== 'home' && !$(prev).hidden) fadeHide($(prev), open); else open();
+}
+
+
+// ---------- Word (.docx) and PDF export: dependency-free ----------
+const crcTable = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = b => { let c = -1; for (let i = 0; i < b.length; i++) c = crcTable[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ -1) >>> 0; };
+function zipStore(files) {   // uncompressed ZIP container (valid for OOXML)
+  const enc = new TextEncoder(), parts = [], cen = [], u16 = n => [n & 255, (n >>> 8) & 255], u32 = n => [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255];
+  let off = 0;
+  for (const f of files) {
+    const nm = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+    const common = [...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(sz), ...u32(sz), ...u16(nm.length), ...u16(0)];
+    parts.push(new Uint8Array([0x50, 0x4b, 3, 4, ...u16(20), ...common]), nm, f.data);
+    cen.push(new Uint8Array([0x50, 0x4b, 1, 2, ...u16(20), ...u16(20), ...common, ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(off)]), nm);
+    off += 30 + nm.length + sz;
+  }
+  const cdSize = cen.reduce((s, b) => s + b.length, 0);
+  const end = new Uint8Array([0x50, 0x4b, 5, 6, ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(cdSize), ...u32(off), ...u16(0)]);
+  const all = [...parts, ...cen, end], out = new Uint8Array(all.reduce((s, b) => s + b.length, 0)); let p = 0;
+  for (const b of all) { out.set(b, p); p += b.length; }
+  return out;
+}
+const xe = s => String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function docxBytes(title, header, rows, notes) {
+  const line = k => `<w:${k} w:val="single" w:sz="6" w:space="0" w:color="000000"/>`;
+  const run = (t, o = '') => `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>${o}</w:rPr><w:t xml:space="preserve">${xe(t)}</w:t></w:r>`;
+  const cell = (t, i, head, last) => {
+    const lead = i === 0 ? Math.floor((t.length - t.trimStart().length) / 2) : 0;
+    return `<w:tc><w:tcPr><w:tcBorders>${head ? line('top') : ''}${head || last ? line('bottom') : ''}</w:tcBorders></w:tcPr><w:p><w:pPr><w:spacing w:before="20" w:after="20"/>${lead ? `<w:ind w:left="${lead * 240}"/>` : ''}<w:jc w:val="${i ? 'center' : 'left'}"/></w:pPr>${run(t.trim(), `${head ? '<w:b/>' : ''}<w:sz w:val="20"/>`)}</w:p></w:tc>`;
+  };
+  const tr = (r, head, last) => `<w:tr>${r.map((t, i) => cell(String(t), i, head, last)).join('')}</w:tr>`;
+  const para = (t, o) => `<w:p><w:pPr><w:spacing w:before="0" w:after="120"/></w:pPr>${run(t, o)}</w:p>`;
+  const wide = header.length > 6, tbl = `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblLayout w:type="autofit"/></w:tblPr><w:tblGrid>${header.map((_, i) => `<w:gridCol w:w="${i ? 1500 : 3000}"/>`).join('')}</w:tblGrid>${tr(header, true, false)}${rows.map((r, i) => tr(r, false, i === rows.length - 1)).join('')}</w:tbl>`;
+  const body = para(title, '<w:b/><w:sz w:val="22"/>') + tbl + (notes.length ? notes.map(n => para(n, '<w:i/><w:sz w:val="18"/>')).join('') : para('', '')) +
+    `<w:sectPr><w:pgSz w:w="${wide ? 15840 : 12240}" w:h="${wide ? 12240 : 15840}"${wide ? ' w:orient="landscape"' : ''}/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>`;
+  const X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>', enc = new TextEncoder();
+  return zipStore([
+    { name: '[Content_Types].xml', data: enc.encode(`${X}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`) },
+    { name: '_rels/.rels', data: enc.encode(`${X}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`) },
+    { name: 'word/document.xml', data: enc.encode(`${X}<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`) }
+  ]);
+}
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+function exportDocx(bytesFn, filename) {
+  try { download(new Blob([bytesFn()], { type: DOCX_MIME }), filename, DOCX_MIME); setStatus('Word file downloaded.'); }
+  catch (e) { setStatus('Word export failed. Use Copy or CSV instead.'); }
+}
+function summaryDocx() {
+  const v = getView();
+  return docxBytes('Descriptive statistics', ['Variable', 'N', 'Missing', 'Summary', 'Summary method'], v.map(r => [r.name, r.type === 'numeric' ? r.n : r.nonMissing, missingText(r), summaryValue(r), r.type === 'numeric' ? r.method : (({ auto: 'Auto: Counts (percentage)', counts: 'Counts', percentage: 'Percentage', counts_percentage: 'Counts (percentage)' })[state.t1.catChoices[r.name] || 'auto'])]),
+    [`Includes all ${v.length} detected numeric and categorical variables.`,
+     'Summary method as selected per variable (Auto is a heuristic, not a normality test). SD is the sample SD (n−1); quartiles use R type 7. Missing = blank, NA, N/A, NaN, null, missing, "." or "-".']);
+}
+function table1Docx() { const t = buildTable1(); return docxBytes('Table 1. Baseline characteristics', t.header, t.rows, t.notes); }
+
+function buildPdf(jpg, pxW, pxH, w, h) {   // one page, one embedded JPEG
+  const m = 36, enc = s => new TextEncoder().encode(s), parts = [], off = []; let len = 0;
+  const push = b => { parts.push(b); len += b.length; };
+  const obj = (n, body) => { off[n] = len; push(enc(`${n} 0 obj\n${body}\nendobj\n`)); };
+  push(enc('%PDF-1.4\n'));
+  obj(1, '<< /Type /Catalog /Pages 2 0 R >>'); obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+  obj(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${+(w + 2 * m).toFixed(2)} ${+(h + 2 * m).toFixed(2)}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`);
+  off[4] = len; push(enc(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${pxW} /Height ${pxH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n`)); push(jpg); push(enc('\nendstream\nendobj\n'));
+  const cs = `q ${+w.toFixed(2)} 0 0 ${+h.toFixed(2)} ${m} ${m} cm /Im0 Do Q`;
+  obj(5, `<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`);
+  const xr = len; let x = 'xref\n0 6\n0000000000 65535 f \n';
+  for (let i = 1; i <= 5; i++) x += String(off[i]).padStart(10, '0') + ' 00000 n \n';
+  push(enc(`${x}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF\n`));
+  const out = new Uint8Array(len); let p = 0; for (const b of parts) { out.set(b, p); p += b.length; } return out;
+}
+function figRaster(mime, cb) {   // renders the displayed SVG at 3x onto a white canvas
+  const cur = figCur, url = URL.createObjectURL(new Blob([cur.svg], { type: 'image/svg+xml' })), img = new Image(), s = 3;
+  img.onload = () => {
+    const cv = document.createElement('canvas'); cv.width = cur.w * s; cv.height = cur.h * s;
+    const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(img, 0, 0, cv.width, cv.height);
+    URL.revokeObjectURL(url); cv.toBlob(b => cb(b, cv.width, cv.height), mime, 0.95);
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); cb(null); };
+  img.src = url;
+}
+function figPng() { if (figCur) figRaster('image/png', b => b ? download(b, figName('png'), 'image/png') : setStatus('PNG export failed. Use SVG.')); }
+function figPdf() {
+  if (!figCur) return; const cur = figCur;
+  figRaster('image/jpeg', async (b, pw, ph) => {
+    if (!b) { setStatus('PDF export failed. Use SVG.'); return; }
+    const w = 468;   // 6.5 in wide; height keeps the figure's aspect ratio
+    download(buildPdf(new Uint8Array(await b.arrayBuffer()), pw, ph, w, w * cur.h / cur.w), figName('pdf'), 'application/pdf');
+  });
+}
+
+// ---------- Reset & events ----------
+function reset() {
+  Object.assign(state, { fileName: '', patientId: '', headers: [], rows: [], results: [], categorical: [], excluded: [], cols: [], types: {}, choices: {}, t1: { group: '', overall: true, skip: new Set(), selected: new Set(), catChoices: {} }, sortKey: null, sortDir: 1 });
+  state.fig = null; state.view = 'home'; $('warnings').hidden = true; $('warnings').innerHTML = '';
+  state.expandedCategoricals = new Set();
+  // Patient ID notice banner disabled by request: $('patientNotice').hidden = true; $('patientNotice').textContent = '';
+  if ($('detail').open) $('detail').close();
+  $('file').value = ''; fadeHide($('results'), () => { fadeShow($('landing')); replayPageFade(); }); showError(''); setStatus('');
+}
+
+function replayPageFade() {
+  const page = document.querySelector('.wrap');
+  page.classList.remove('fade-in');
+  void page.offsetWidth;
+  page.classList.add('fade-in');
+}
+
+function openAbout() {
+  if (aboutReturnState) return;
+  const ids = ['.page-header', 'landing', 'status', 'error', 'results'];
+  aboutReturnState = Object.fromEntries(ids.map(id => { const el = id.startsWith('.') ? document.querySelector(id) : $(id); return [id, el.hidden]; }));
+  ids.forEach(id => { const el = id.startsWith('.') ? document.querySelector(id) : $(id); el.hidden = true; });
+  $('aboutPage').hidden = false;
+  $('aboutTitle').focus({ preventScroll: true });
+  $('aboutPage').classList.remove('fade-soft'); void $('aboutPage').offsetWidth; $('aboutPage').classList.add('fade-soft');
+}
+
+function closeAbout() {
+  if (!aboutReturnState) return;
+  for (const [id, wasHidden] of Object.entries(aboutReturnState)) {
+    const el = id.startsWith('.') ? document.querySelector(id) : $(id); el.hidden = wasHidden;
+  }
+  aboutReturnState = null;
+  $('aboutPage').hidden = true;
+  $('aboutOpen').focus({ preventScroll: true });
+}
+
+function init() {
+  $('copyrightYear').textContent = String(new Date().getFullYear());
+  $('aboutOpen').addEventListener('click', openAbout);
+  $('aboutBack').addEventListener('click', closeAbout);
+  $('sheetContinue').addEventListener('click', () => $('sheetPrompt').close('choose'));
+  $('sheetCancel').addEventListener('click', () => $('sheetPrompt').close('cancel'));
+  $('patientColumn').addEventListener('change', e => { $('patientYes').disabled = !e.target.value; });
+  $('patientYes').addEventListener('click', () => { if ($('patientColumn').value) $('patientPrompt').close('yes'); });
+  $('patientNo').addEventListener('click', () => $('patientPrompt').close('no'));
+  $('file').addEventListener('change', e => handleFile(e.target.files[0]));
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+  ['dragover', 'drop'].forEach(t => window.addEventListener(t, e => e.preventDefault()));
+  $('sample').addEventListener('click', () => loadText(sampleCSV(), 'sample_data.csv', { skipPatientPrompt: true }));
+  $('reset').addEventListener('click', reset);
+  $('restart').addEventListener('click', reset);
+  document.querySelectorAll('#stats [data-sort]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.sort;
+    state.sortDir = state.sortKey === k ? -state.sortDir : 1; state.sortKey = k; renderTable();
+  }));
+  const tbody = $('stats').querySelector('tbody');
+  tbody.addEventListener('click', e => {
+    const expand = e.target.closest('button[data-expand-cat]');
+    if (expand) { e.preventDefault(); const name = expand.dataset.expandCat; state.expandedCategoricals.has(name) ? state.expandedCategoricals.delete(name) : state.expandedCategoricals.add(name); renderTable(); return; }
+    if (e.target.closest('select')) return;
+    const tr = e.target.closest('tr[data-name]'); if (tr) showDetail(tr.dataset.name);
+  });
+  // Per-variable method change: update only that row's summary cell (keeps focus on the select)
+  tbody.addEventListener('change', e => {
+    const sel = e.target.closest('select.method'); if (!sel) return;
+    if (sel.dataset.catMethod) { state.t1.catChoices[sel.dataset.catMethod] = sel.value; renderCategoricalSettings(); renderTable(); renderT1(); return; }
+    const r = state.results.find(x => x.name === sel.dataset.name); if (!r) return;
+    setMethod(r, sel.value);
+    sel.closest('tr').children[3].innerHTML = summaryCell(r);
+    renderT1();
+  });
+  // Global buttons apply to ALL numeric variables (not just those matching the filter)
+  document.querySelectorAll('[data-setall]').forEach(b => b.addEventListener('click', () => {
+    state.results.forEach(r => setMethod(r, b.dataset.setall));
+    renderTable();
+    setStatus(b.dataset.setall === 'auto' ? 'All variables set to automatic selection.' : `All variables set to ${b.dataset.setall}.`);
+  }));
+  document.querySelectorAll('[data-cat-setall]').forEach(b => b.addEventListener('click', () => {
+    state.categorical.forEach(r => { state.t1.catChoices[r.name] = b.dataset.catSetall; });
+    renderCategoricalSettings(); renderTable(); renderT1();
+  }));
+  tbody.addEventListener('keydown', e => {
+    if (e.target.closest('select')) return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const tr = e.target.closest('tr[data-name]'); if (tr) { e.preventDefault(); showDetail(tr.dataset.name); }
+  });
+  $('copyTable').addEventListener('click', () => copyText(tableRows().map(r => r.map(tsvCell).join('\t')).join('\n'), 'Table copied (tab-separated).'));
+  $('copyMs').addEventListener('click', () => copyText('Overall summary (not a stratified Table 1); missing values excluded\n' + getView().map(r => `${r.name}, ${r.type === 'numeric' ? r.method : categoricalMode(r)}: ${summaryValue(r)}`).join('\n'), 'Copied for manuscript.'));
+  $('dlCsv').addEventListener('click', () => download(tableRows().map(r => r.map(csvCell).join(',')).join('\r\n'), baseName() + '.csv', 'text/csv'));
+  $('dlTsv').addEventListener('click', () => download(tableRows().map(r => r.map(tsvCell).join('\t')).join('\r\n'), baseName() + '.tsv', 'text/tab-separated-values'));
+}
+init(); initExtra();

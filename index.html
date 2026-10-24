@@ -1,353 +1,221 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Data Analysis Assistant – Table 1 and Charts from Your Dataset</title>
-  <meta name="description" content="Upload a CSV or Excel file and generate descriptive statistics, a publication-style Table 1 and three basic charts. All processing happens locally in your browser.">
-  <link rel="stylesheet" href="style.css">
-
-  <!--
-    Third-party libraries loaded from CDNs (external dependencies; see the privacy section below).
-    - Chart.js: interactive charts
-    - SheetJS (xlsx): reading Excel files and writing .xlsx exports
-    Your data are never sent to these servers; only the library files are downloaded.
-  -->
-  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
-  <script defer src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script defer src="script.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Descriptive Statistics Generator</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to main content</a>
-
-  <header class="site-header">
-    <div class="container">
-      <h1>Data Analysis Assistant </h1>
-      <p class="subtitle">Transform your clinical data into tables and visualizations.</p>
-      <p class="supporting">Upload your data, review your variables, and automatically generate descriptive statistics in minutes.</p>
-      <p class="privacy-badge">
-        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
-        <span>Your data are processed locally in your browser.</span>
-      </p>
+<main class="wrap fade-in">
+  <header class="page-header">
+    <div>
+      <h1>Descriptive Statistics Generator</h1>
+      <p class="sub">Upload a CSV or Excel workbook to generate descriptive statistics.</p>
     </div>
+    <div class="header-actions"><button type="button" id="aboutOpen" class="btn">About the Author</button><button type="button" id="restart" class="btn primary">Restart Analysis</button></div>
   </header>
 
-  <nav class="container" aria-label="Progress through the four steps">
-    <ol class="stepper" id="stepper">
-      <li data-step="1" class="is-current" aria-current="step"><span class="step-num">1</span><span class="step-text">Upload dataset</span></li>
-      <li data-step="2"><span class="step-num">2</span><span class="step-text">Review variables</span></li>
-      <li data-step="3"><span class="step-num">3</span><span class="step-text">Generate Table 1</span></li>
-      <li data-step="4"><span class="step-num">4</span><span class="step-text">Visualize and download</span></li>
-    </ol>
-  </nav>
+  <section id="landing" aria-label="Upload">
+    <label class="drop" id="drop" for="file">
+      <input type="file" id="file" accept=".csv,.xlsx,.xls,.xlsm,.xlsb,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      <strong>Drop a CSV or Excel file here, or click to choose a file</strong>
+      <span>For CSV or Excel files, the first row must contain column names. Choose a worksheet when an Excel workbook has multiple sheets.</span>
+    </label>
+    <p class="actions"><button type="button" id="sample" class="btn">Try sample data</button></p>
+  </section>
 
-  <main id="main" class="container">
-    <noscript><div class="msg msg-error"><strong>Error: </strong>This tool needs JavaScript. Please enable it in your browser settings.</div></noscript>
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+  <div id="error" class="error" role="alert" hidden></div>
 
-    <!-- Global messages (export problems, library load problems, etc.) -->
-    <div id="globalMessages" class="message-stack" aria-live="polite"></div>
-
-    <!-- ===================== STEP 1 ===================== -->
-    <section id="step1" class="card" aria-labelledby="step1-title">
-      <div class="card-head">
-        <span class="step-badge" aria-hidden="true">1</span>
-        <div>
-          <h2 id="step1-title">Upload dataset</h2>
-          <p class="lead">Upload a CSV (.csv) or Excel (.xlsx, .xls) file. Each row should be one patient or observation, and each column one variable. The first row should hold the column names.</p>
-        </div>
+  <div id="results" hidden>
+    <section class="fileinfo" aria-label="File information">
+      <div>
+        <h2 id="fname"></h2>
+        <dl id="fstats"></dl>
       </div>
-
-      <div class="upload-grid">
-        <label class="dropzone" id="dropzone" for="fileInput">
-          <input type="file" id="fileInput" class="visually-hidden" accept=".csv,.xlsx,.xls" aria-describedby="uploadHelp">
-          <svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"></path><path d="M7 9l5-5 5 5"></path><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"></path></svg>
-          <span class="dropzone-title">Drag and drop a file here, or <span class="link-like">choose a file</span></span>
-          <span class="dropzone-sub" id="uploadHelp">.csv, .xlsx or .xls &middot; up to 25 MB, 100,000 rows and 300 columns</span>
-        </label>
-
-        <div class="sample-box">
-          <h3>No data handy?</h3>
-          <p>Try the tool with a small <strong>fictional</strong> dataset of 26 patients (educational use only; not real patient data).</p>
-          <button type="button" class="btn btn-secondary" id="sampleBtn">Load sample dataset</button>
-        </div>
-      </div>
-
-      <p class="note">Files larger than these limits are rejected with a message; the tool never silently truncates your data. If your file is too large, remove unneeded columns or split it into parts.</p>
-
-      <details class="privacy-details">
-        <summary>How your data are handled, and a note about third-party scripts</summary>
-        <div class="details-body">
-          <ul>
-            <li><strong>Everything runs in your browser.</strong> Your file is read and analyzed on your own computer. No patient data are sent to a server, an analytics service, or any AI model, and this page makes no AI or API calls.</li>
-            <li><strong>External dependencies.</strong> This page loads two open-source libraries from public CDNs: Chart.js (charts) and SheetJS (Excel files). Those servers receive a request for the library files (and can see your IP address and browser details, as with any website), but never your data.</li>
-            <li><strong>Optional fully offline use.</strong> Download <code>chart.umd.js</code> (Chart.js 4.4.1) and <code>xlsx.full.min.js</code> (SheetJS 0.20.3) into a folder named <code>vendor</code> next to <code>index.html</code>, then change the two <code>&lt;script src="https://..."&gt;</code> lines in <code>index.html</code> to <code>vendor/chart.umd.js</code> and <code>vendor/xlsx.full.min.js</code>. Check with your institution's policy before using any web tool with identifiable patient data; remove direct identifiers where possible.</li>
-          </ul>
-        </div>
-      </details>
-
-      <div id="loadingStatus" class="loading" role="status" hidden>
-        <span class="spinner" aria-hidden="true"></span><span id="loadingText">Reading file…</span>
-      </div>
-      <div id="uploadMessages" class="message-stack" aria-live="polite"></div>
-
-      <div id="datasetInfo" hidden>
-        <div class="dataset-bar">
-          <div>
-            <p class="dataset-name"><span class="visually-hidden">Loaded dataset: </span><strong id="fileNameOut"></strong></p>
-            <p class="dataset-dims" id="dimsOut"></p>
-          </div>
-          <button type="button" class="btn btn-danger-outline" id="removeBtn">Remove dataset and start over</button>
-        </div>
-
-        <fieldset class="import-options" id="importOptions">
-          <legend>Import options</legend>
-          <div class="option-row">
-            <label class="field" id="sheetField" hidden>
-              <span class="field-label">Worksheet to analyze</span>
-              <select id="sheetSelect"></select>
-            </label>
-            <label class="field" id="delimiterField" hidden>
-              <span class="field-label">Column separator</span>
-              <select id="delimiterSelect">
-                <option value="auto">Detect automatically</option>
-                <option value="comma">Comma ( , )</option>
-                <option value="semicolon">Semicolon ( ; )</option>
-                <option value="tab">Tab</option>
-                <option value="pipe">Pipe ( | )</option>
-              </select>
-            </label>
-            <label class="check-field">
-              <input type="checkbox" id="headerCheck" checked>
-              <span>First row contains column names</span>
-            </label>
-          </div>
-        </fieldset>
-
-        <div id="importNotes" class="message-stack"></div>
-
-        <h3 class="subhead">Data preview <span class="subhead-meta" id="previewMeta"></span></h3>
-        <div class="table-scroll" tabindex="0" role="region" aria-label="Preview of the first 10 rows (scrollable)">
-          <table class="data-table" id="previewTable"></table>
-        </div>
-      </div>
+      <button type="button" id="reset" class="btn">Remove file</button>
     </section>
 
-    <!-- ===================== STEP 2 ===================== -->
-    <section id="step2" class="card" aria-labelledby="step2-title" hidden>
-      <div class="card-head">
-        <span class="step-badge" aria-hidden="true">2</span>
-        <div>
-          <h2 id="step2-title">Review variable classifications</h2>
-          <p class="lead">The tool suggests a type for each column. <strong>These are suggestions; please check them.</strong> Numeric codes such as 0/1, 1/2/3 or 999 can be categories, identifiers or missing-value codes, not measurements.</p>
+    <div id="warnings" class="warn" hidden></div>
+    <!-- Patient ID notice banner disabled by request: <div id="patientNotice" class="warn patient-notice" role="status" hidden></div> -->
+
+    <div id="home">
+      <h2 data-h tabindex="-1" class="sr">Choose a workspace</h2>
+      <svg class="branch" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0V50H0V100M50 50H100V100" fill="none" stroke="#aab3bf" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>
+      <div class="paths">
+        <button type="button" class="path" data-view="tables"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M3 14h18M10 4v16"/></svg><strong>Tables</strong><span>Descriptive statistics, frequencies, Table 1</span></button>
+        <button type="button" class="path" data-view="figures"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"/></svg><strong>Figures</strong><span>Histograms, box plots, bar charts, scatter, missingness</span></button>
+      </div>
+    </div>
+
+    <div id="tables" hidden>
+      <div class="back"><h2 data-h tabindex="-1">Tables</h2></div>
+
+    <section aria-labelledby="h-summary">
+      <h2 id="h-summary">Summary statistics</h2>
+      <div class="toolbar">
+        <span class="spacer"></span>
+        <details class="menu">
+          <summary class="btn">Export</summary>
+          <div class="menupanel">
+            <button type="button" class="btn" id="copyTable">Copy table</button>
+            <button type="button" class="btn" id="dlCsv">Download CSV</button>
+            <button type="button" class="btn" id="dlTsv">Download TSV</button>
+            <button type="button" class="btn" id="dlDocx">Download Word (.docx)</button>
+            <p id="exportScope" class="note"></p>
+          </div>
+        </details>
+        <button type="button" class="btn primary" id="copyMs">Copy for manuscript</button>
+      </div>
+
+      <details class="settings">
+        <summary>Summary settings</summary>
+        <div class="group" role="group" aria-label="Set summary method for all numeric variables">
+          <span class="grouplabel">Set all:</span>
+          <button type="button" class="btn" data-setall="auto">Auto</button>
+          <button type="button" class="btn" data-setall="Mean (SD)">Mean (SD)</button>
+          <button type="button" class="btn" data-setall="Median (IQR)">Median (IQR)</button>
         </div>
-      </div>
+        <p id="scope" class="note"></p>
+        <div class="group" role="group" aria-label="Categorical summary format for all variables">
+          <span class="grouplabel">Categorical set all:</span>
+          <button type="button" class="btn" data-cat-setall="auto">Auto</button>
+          <button type="button" class="btn" data-cat-setall="counts">Counts</button>
+          <button type="button" class="btn" data-cat-setall="percentage">Percentage</button>
+          <button type="button" class="btn" data-cat-setall="counts_percentage">Counts (percentage)</button>
+        </div>
+        <div id="catSettings" class="cat-settings" aria-label="Categorical variable summary settings"></div>
+      </details>
 
-      <h3 class="subhead">Dataset quality summary</h3>
-      <div class="qcards" id="qualityCards"></div>
-      <div id="qualityMessages" class="message-stack"></div>
-      <p class="note">Missing values are excluded from the calculations for the corresponding variable only. Nothing is replaced with zero, imputed, or deleted, and no records are removed.</p>
-
-      <div class="missing-codes">
-        <label class="field grow">
-          <span class="field-label">Optional: treat these values as missing
-            <span class="tip" tabindex="0" role="note" aria-label="Some datasets use numbers such as 999 or -1 to mean 'not recorded'. These are not converted automatically because they can also be real values. Enter the codes here, separated by commas, to treat them as missing in every column." data-tip="Some datasets use numbers like 999 or -1 to mean 'not recorded'. They are not converted automatically because they could be real values. Enter codes separated by commas; they apply to every column.">?</span>
-          </span>
-          <input type="text" id="missingCodesInput" placeholder="e.g. 999, -1" autocomplete="off" spellcheck="false">
-        </label>
-        <button type="button" class="btn btn-secondary" id="applyMissingCodesBtn">Apply missing-value codes</button>
-      </div>
-      <p class="note">Applying codes re-reads the dataset and re-detects variable types. The codes apply to <em>all</em> columns, so only use values that mean “missing” everywhere.</p>
-
-      <h3 class="subhead">Variables and missing data</h3>
-      <div id="reviewMessages" class="message-stack" aria-live="polite"></div>
-      <div class="table-scroll" tabindex="0" role="region" aria-label="Variable classification table (scrollable)">
-        <table class="data-table variable-table" id="variableTable">
-          <caption class="visually-hidden">Detected variable types, missing data, and analysis settings for each column</caption>
+      <div class="tablewrap">
+        <table id="stats">
+          <caption class="sr">Summary statistics and counts for detected variables</caption>
           <thead>
             <tr>
               <th scope="col">Variable</th>
-              <th scope="col">Detected as</th>
-              <th scope="col">Treat as
-                <span class="tip" tabindex="0" role="note" aria-label="Choose how this variable should be analyzed. Continuous: measured numbers such as age or BMI. Binary: two groups such as yes or no. Multicategory: three or more groups. Identifier, date and text columns are not summarized." data-tip="Continuous: measured numbers (age, BMI). Binary: two groups (yes/no). Multicategory: 3+ groups. Identifier, date and text columns are not summarized.">?</span>
-              </th>
-              <th scope="col">Include in analysis</th>
-              <th scope="col" class="num">Non-missing</th>
-              <th scope="col" class="num">Missing (%)</th>
-              <th scope="col" class="num">Unique values</th>
-              <th scope="col">Sample values</th>
-              <th scope="col">Notes</th>
+              <th scope="col" class="num">N</th>
+              <th scope="col" class="num">Missing</th>
+              <th scope="col">Summary</th>
+              <th scope="col">Summary method</th>
             </tr>
           </thead>
-          <tbody id="variableTbody"></tbody>
+          <tbody></tbody>
         </table>
       </div>
-
-      <div id="staleBanner" class="msg msg-warn" role="status" hidden>
-        <strong>Warning: </strong>You changed a classification after generating results. Click “Update Table 1 and charts” to refresh them.
-      </div>
-
-      <div class="actions">
-        <button type="button" class="btn btn-primary" id="confirmBtn">Confirm classifications and generate Table 1</button>
-        <button type="button" class="btn btn-secondary" id="dlQualityCsv">Download dataset-quality summary (CSV)</button>
-      </div>
+      <p class="note">Select a continuous variable row for details and a box plot. Categorical rows show the selected counts and/or percentages. Continuous Auto is a heuristic, not a normality test.</p>
     </section>
 
-    <!-- ===================== STEP 3 ===================== -->
-    <section id="step3" class="card" aria-labelledby="step3-title" hidden>
-      <div class="card-head">
-        <span class="step-badge" aria-hidden="true">3</span>
-        <div>
-          <h2 id="step3-title">Table 1: descriptive statistics</h2>
-          <p class="lead">A publication-style summary of every included variable. Change the options below and the table updates immediately.</p>
-        </div>
-      </div>
-
-      <div class="controls">
-        <label class="field">
-          <span class="field-label">Continuous variables shown as
-            <span class="tip" tabindex="0" role="note" aria-label="Mean and standard deviation suit roughly symmetric data. Median and interquartile range are often preferred for skewed data or data with extreme values." data-tip="Mean (SD) suits roughly symmetric data. Median (IQR) is often preferred for skewed data or data with extreme values.">?</span>
-          </span>
-          <select id="summarySelect">
-            <option value="mean">Mean (SD)</option>
-            <option value="median">Median (IQR)</option>
-            <option value="both">Both</option>
-          </select>
-        </label>
-        <label class="field">
-          <span class="field-label">Decimal places</span>
-          <select id="decimalsSelect">
-            <option value="0">0</option>
-            <option value="1" selected>1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-          </select>
-        </label>
-        <label class="check-field">
-          <input type="checkbox" id="showCountsCheck" checked>
-          <span>Show observations (n) and missing columns</span>
-        </label>
-      </div>
-
-      <h3 class="subhead" id="table1-heading">Table 1. Characteristics of the dataset</h3>
-      <div class="table-scroll" tabindex="0" role="region" aria-labelledby="table1-heading">
-        <table class="table1" id="table1"></table>
-      </div>
-      <p class="footnote" id="table1Footnote"></p>
-      <div id="table1Warnings" class="message-stack"></div>
-
-      <div class="edu-note">
-        <h3>Choosing between mean (SD) and median (IQR)</h3>
-        <p>The right summary depends on how your data are distributed and on your research question. Mean (SD) is commonly used when values are roughly symmetric; median (IQR) is often preferred when values are skewed or include extreme values. Look at the histogram in step 4 before deciding. This tool does not choose for you.</p>
-      </div>
-
-      <div class="actions">
-        <button type="button" class="btn btn-primary" id="dlTableCsv">Download Table 1 (CSV)</button>
-        <button type="button" class="btn btn-primary" id="dlTableXlsx">Download Table 1 (Excel)</button>
-      </div>
-    </section>
-
-    <!-- ===================== STEP 4 ===================== -->
-    <section id="step4" class="card" aria-labelledby="step4-title" hidden>
-      <div class="card-head">
-        <span class="step-badge" aria-hidden="true">4</span>
-        <div>
-          <h2 id="step4-title">Explore visualizations and download results</h2>
-          <p class="lead">Three basic charts. Pick a variable in each chart's dropdown; charts update right away.</p>
-        </div>
-      </div>
-
-      <div class="chart-grid">
-        <!-- Histogram -->
-        <article class="chart-card" aria-labelledby="hist-title">
-          <h3 id="hist-title">Histogram</h3>
-          <p class="chart-explain">A histogram shows how values are distributed. It can help you identify common ranges, skewness, and potential unusual values.</p>
-          <div class="controls">
-            <label class="field">
-              <span class="field-label">Continuous variable</span>
-              <select id="histVar"></select>
-            </label>
+    <details class="section" open>
+      <summary>Table 1</summary>
+      <div class="t1ctl">
+        <details class="menu" id="t1variablesMenu">
+          <summary class="btn" id="t1variablesLabel">Select variables</summary>
+          <div class="menupanel t1-variable-panel">
+            <div class="t1-variable-actions"><button type="button" class="btn" id="t1selectAll">Select all</button><button type="button" class="btn" id="t1selectNone">Clear all</button></div>
+            <div id="t1variables" class="t1-variable-list" role="group" aria-label="Variables included in Table 1"></div>
           </div>
-          <div class="chart-wrap" id="histWrap"><canvas id="histCanvas" role="img" aria-label="Histogram"></canvas></div>
-          <p class="chart-empty" id="histEmpty" hidden></p>
-          <p class="chart-note" id="histNote"></p>
-          <p class="chart-interp" id="histInterp"></p>
-          <button type="button" class="btn btn-secondary btn-sm" id="dlHistPng">Download PNG</button>
-        </article>
-
-        <!-- Bar chart -->
-        <article class="chart-card" aria-labelledby="bar-title">
-          <h3 id="bar-title">Bar chart</h3>
-          <p class="chart-explain">A bar chart compares the number or percentage of observations in each category.</p>
-          <div class="controls">
-            <label class="field">
-              <span class="field-label">Categorical variable</span>
-              <select id="barVar"></select>
-            </label>
-            <fieldset class="segmented">
-              <legend class="field-label">Show</legend>
-              <label><input type="radio" name="barMode" id="barModeCount" value="count" checked><span>Counts</span></label>
-              <label><input type="radio" name="barMode" id="barModePct" value="pct"><span>Percentages</span></label>
-            </fieldset>
-          </div>
-          <div class="chart-wrap" id="barWrap"><canvas id="barCanvas" role="img" aria-label="Bar chart"></canvas></div>
-          <p class="chart-empty" id="barEmpty" hidden></p>
-          <p class="chart-note" id="barNote"></p>
-          <p class="chart-interp" id="barInterp"></p>
-          <button type="button" class="btn btn-secondary btn-sm" id="dlBarPng">Download PNG</button>
-        </article>
-
-        <!-- Box plot -->
-        <article class="chart-card chart-card-wide" aria-labelledby="box-title">
-          <h3 id="box-title">Box plot</h3>
-          <p class="chart-explain">A box plot summarizes the median and spread of a continuous variable. When grouped, it helps you compare distributions across categories.</p>
-          <div class="controls">
-            <label class="field">
-              <span class="field-label">Continuous variable</span>
-              <select id="boxVar"></select>
-            </label>
-            <label class="field">
-              <span class="field-label">Group by (optional)</span>
-              <select id="boxGroup"></select>
-            </label>
-          </div>
-          <div class="chart-wrap" id="boxWrap"><canvas id="boxCanvas" role="img" aria-label="Box plot"></canvas></div>
-          <p class="chart-empty" id="boxEmpty" hidden></p>
-          <ul class="box-legend" id="boxLegend">
-            <li><strong>Box:</strong> the middle half of the values (Q1 to Q3)</li>
-            <li><strong>Thick line inside the box:</strong> median</li>
-            <li><strong>Whiskers:</strong> the most extreme values within 1.5 &times; IQR of the box</li>
-            <li><strong>Hollow circles:</strong> potential outliers beyond the whiskers</li>
-          </ul>
-          <p class="chart-note" id="boxNote"></p>
-          <div id="boxWarnings" class="message-stack"></div>
-          <p class="chart-interp" id="boxInterp"></p>
-          <p class="note">Potential outliers are not automatically errors. They may be real, clinically meaningful values. Investigate them before deciding whether to correct or remove anything.</p>
-          <button type="button" class="btn btn-secondary btn-sm" id="dlBoxPng">Download PNG</button>
-        </article>
+        </details>
+        <label for="t1group">Group by</label><select id="t1group" class="method"></select>
+        <label><input type="checkbox" id="t1overall" checked> Overall column</label>
+        <button type="button" class="btn" id="t1copy">Copy</button>
+        <button type="button" class="btn" id="t1csv">Download CSV</button>
+        <button type="button" class="btn" id="t1docx">Download Word</button>
       </div>
+      <div class="tablewrap"><table id="t1"><caption class="sr">Table 1 baseline characteristics</caption></table></div>
+      <ul id="t1notes" class="note"></ul>
+    </details>
 
-      <section class="understand" aria-labelledby="understand-title">
-        <h3 id="understand-title">Understand your results</h3>
-        <p class="note">These plain-English statements are generated by simple rules from your computed results. No AI service is used and nothing leaves your browser.</p>
-        <div id="interpretation"></div>
-      </section>
+    <details class="section">
+      <summary>Variable types</summary>
+      <p class="note">Override automatic detection (e.g., 0/1 treatment codes or numeric IDs). Original values are never changed.</p>
+      <div class="tablewrap"><table id="types"></table></div>
+    </details>
 
-      <section class="downloads" aria-labelledby="downloads-title">
-        <h3 id="downloads-title">Download your results</h3>
-        <p class="note">Table 1 (CSV and Excel) is in step 3, the dataset-quality summary (CSV) is in step 2, and each chart has its own PNG button. You can also save everything as one report:</p>
-        <div class="actions">
-          <button type="button" class="btn btn-primary" id="dlReportHtml">Download full report (HTML)</button>
-        </div>
-      </section>
-    </section>
-  </main>
+    <details class="section">
+      <summary>Methodology</summary>
+      <ul class="note">
+        <li><strong>Auto</strong> suggests Median (IQR) if n &lt; 10 or |skewness| ≥ 1; otherwise Mean (SD). Constant variables default to Mean (SD).</li>
+        <li>This is a heuristic for exploratory description. It is not a formal normality test or a substitute for statistical judgment; verify assumptions before formal analysis or publication.</li>
+        <li>SD is the sample SD (n−1). Quartiles use linear interpolation (R type 7 / Excel QUARTILE.INC). Skewness is the adjusted Fisher–Pearson coefficient (needs n ≥ 3).</li>
+        <li><strong>Categorical</strong> percentages use non-missing observations; labels are trimmed, case-sensitive strings. <strong>Table 1</strong> is descriptive only (no p-values). Exports prefix text cells starting with = + - @ with an apostrophe to prevent spreadsheet formula execution.</li>
+        <li><strong>Missing</strong> = blank, NA, N/A, NaN, null, missing, “.” or “-”. Other non-numeric entries in a mostly numeric column are ignored in the summary and listed in a warning.</li>
+      </ul>
+    </details>
 
-  <!--
-  <footer class="site-footer">
-    <div class="container">
-      <p><strong>Data Analysis Assistant</strong></p>
+    <details class="section">
+      <summary>Data preview</summary>
+      <div class="tablewrap"><table id="preview"></table></div>
+    </details>
+
+    <details class="section">
+      <summary>Categorical variables</summary>
+      <p id="catinfo" class="note"></p>
+      <label for="catsearch" class="sr">Search categorical variables</label>
+      <input type="search" id="catsearch" placeholder="Search categorical variables…" autocomplete="off">
+      <div id="cat"></div>
+    </details>
     </div>
-  </footer>
-  -->
+
+    <div id="figures" hidden>
+      <div class="back"><h2 data-h tabindex="-1">Figures</h2></div>
+      <p class="sub">Explore distributions, relationships, and missing data.</p>
+      <div class="figtypes" id="figtypes" role="group" aria-label="Figure type"></div>
+      <div class="figctl" id="figctl"></div>
+      <div class="figwrap" id="figplot"></div>
+      <p class="note" id="figdesc" aria-live="polite"></p>
+      <div class="toolbar">
+        <button type="button" class="btn primary" id="figsvg">Download SVG</button>
+        <button type="button" class="btn" id="figpng">Download PNG (3×)</button>
+        <button type="button" class="btn" id="figpdf">Download PDF</button>
+        <button type="button" class="btn" id="figreset">Reset figure</button>
+      </div>
+    </div>
+  </div>
+
+  <section id="aboutPage" class="about-page" aria-labelledby="aboutTitle" hidden>
+    <div class="about-heading"><h2 id="aboutTitle" tabindex="-1">About the Author</h2><button type="button" class="btn primary" id="aboutBack">Back to the app</button></div>
+    <article class="author-card">
+      <img src="andrew-gregory.png" alt="Professional portrait of Andrew Gregory, MD" class="author-photo">
+      <div><h3>Andrew Gregory, MD</h3></div>
+    </article>
+    <!-- Future author placeholder:
+    <article class="author-card">
+      <img src="future-author.png" alt="Professional portrait of [Author Name]" class="author-photo">
+      <div><h3>[Author Name, Credentials]</h3><p>[Short author biography]</p></div>
+    </article>
+    -->
+  </section>
+
+  <footer class="privacy"><span>Files are processed locally in your browser and are not uploaded. Excel support loads the SheetJS parser from its CDN; workbook data stays on your device. Local processing alone does not ensure HIPAA or institutional compliance.</span><span class="copyright">© <span id="copyrightYear">2026</span> Descriptive Statistics Generator</span></footer>
+</main>
+
+<dialog id="sheetPrompt" aria-labelledby="sheetTitle" aria-describedby="sheetDescription">
+  <h2 id="sheetTitle">Choose a worksheet</h2>
+  <p id="sheetDescription">This workbook contains multiple worksheets. Select the worksheet you want to analyze.</p>
+  <label for="sheetChoice">Worksheet</label>
+  <select id="sheetChoice" class="method"></select>
+  <div class="patient-actions"><button type="button" class="btn primary" id="sheetContinue">Continue</button><button type="button" class="btn" id="sheetCancel">Cancel</button></div>
+</dialog>
+
+<dialog id="patientPrompt" aria-labelledby="patientTitle" aria-describedby="patientDescription">
+  <h2 id="patientTitle">Identify a patient ID column</h2>
+  <p id="patientDescription">A patient ID is a code, number, or label used to identify an individual patient. Does this file have one? Choose its column, then exclude it from summaries and figures; its values will also be hidden from the data preview.</p>
+  <label for="patientColumn">Patient ID column</label>
+  <select id="patientColumn" class="method"><option value="">Choose a column…</option></select>
+  <p id="patientSuggestion" class="patient-suggestion" hidden></p>
+  <div class="patient-actions"><button type="button" class="btn primary" id="patientYes" disabled>Yes, exclude this column</button><button type="button" class="btn" id="patientNo">No patient ID</button></div>
+</dialog>
+
+<dialog id="detail" aria-labelledby="dtitle">
+  <h2 id="dtitle"></h2>
+  <div class="boxplot-wrap">
+    <canvas id="boxplot" width="700" height="280" role="img" aria-label="Box and whisker plot"></canvas>
+  </div>
+  <dl id="dbody" class="grid"></dl>
+  <form method="dialog"><button class="btn primary" autofocus>Close</button></form>
+</dialog>
+
+<script src="main.js"></script>
 </body>
 </html>
