@@ -666,6 +666,7 @@ function freqTable(v) {
 }
 
 function renderCategorical() {
+  if (!$('catsearch') || !$('catinfo') || !$('cat')) return;
   const c = state.categorical, q = $('catsearch').value.trim().toLowerCase(), box = $('cat');
   $('catinfo').textContent = `${c.length} categorical, ${state.results.length} numeric, ${state.excluded.length} excluded. Labels are trimmed and case-sensitive; missing values are shown separately.`;
   box.replaceChildren();
@@ -773,7 +774,7 @@ function initExtra() {
   $('t1selectAll').addEventListener('click', () => { state.t1.selected = new Set(state.headers.filter(name => name !== state.patientId)); fillGroupSelect(); renderT1(); });
   $('t1selectNone').addEventListener('click', () => { state.t1.selected.clear(); fillGroupSelect(); renderT1(); });
   $('t1overall').addEventListener('change', e => { state.t1.overall = e.target.checked; renderT1(); });
-  $('catsearch').addEventListener('input', renderCategorical);
+  if ($('catsearch')) $('catsearch').addEventListener('input', renderCategorical);
   $('t1copy').addEventListener('click', () => copyText(t1Matrix().map(r => r.map(tsvCell).join('\t')).join('\n'), 'Table 1 copied (tab-separated).'));
   $('t1csv').addEventListener('click', () => download(t1Matrix().map(r => r.map(csvCell).join(',')).join('\r\n'), baseName().replace('_descriptive_stats', '_table1') + '.csv', 'text/csv'));
   $('stats').querySelector('tbody').addEventListener('change', renderT1);
