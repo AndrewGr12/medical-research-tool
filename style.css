@@ -128,11 +128,11 @@ td.ind{padding-left:28px}
 @keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 @keyframes backdropIn{from{opacity:0}to{opacity:1}}
 .fade-in{animation:fadeIn .54s ease-in-out both}
-.fade-soft{animation:fadeIn .25s ease-in-out both}
+.fade-soft{animation:fadeIn .54s ease-in-out both}
 .fade-out{opacity:0;transform:translateY(-4px);transition:opacity .2s ease-in-out,transform .2s ease-in-out}
-dialog[open]{animation:fadeIn .3s ease-in-out both}
-dialog[open]::backdrop{animation:backdropIn .3s ease-in-out both}
-.warn:not([hidden]),.error:not([hidden]){animation:fadeIn .3s ease-in-out both}
+dialog[open]{animation:fadeIn .54s ease-in-out both}
+dialog[open]::backdrop{animation:backdropIn .54s ease-in-out both}
+.warn:not([hidden]),.error:not([hidden]){animation:fadeIn .54s ease-in-out both}
 .btn,.path,.figtype,.drop{transition:background-color .14s ease,border-color .14s ease}
 #stats tbody tr{transition:background-color .11s ease}
 /* Persistent workspace switcher */
