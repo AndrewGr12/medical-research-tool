@@ -1012,6 +1012,10 @@ function figPdf() {
 
 // ---------- Reset & events ----------
 function reset() {
+  aboutReturnState = null;
+  $('aboutPage').hidden = true;
+  document.querySelector('.page-header').hidden = false;
+  $('landing').hidden = false;
   Object.assign(state, { fileName: '', patientId: '', headers: [], rows: [], results: [], categorical: [], excluded: [], cols: [], types: {}, choices: {}, t1: { group: '', overall: true, skip: new Set(), selected: new Set(), catChoices: {} }, sortKey: null, sortDir: 1 });
   state.fig = null; state.view = 'home'; $('warnings').hidden = true; $('warnings').innerHTML = '';
   state.expandedCategoricals = new Set();
