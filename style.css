@@ -153,7 +153,7 @@ dialog[open]::backdrop{animation:backdropIn .54s ease-in-out both}
 #home.compact .paths{width:100%;margin:0 auto;gap:12px}
 #home.compact .path{flex-direction:column;align-items:flex-start;gap:4px;padding:12px 15px;min-height:122px}
 #home.compact .path svg{width:24px;height:24px}
-#home.compact .path strong{font-size:1.15rem}
-#home.compact .path span{display:block;font-size:.9rem;line-height:1.4}
-@media(max-width:600px){#home.compact .paths{width:100%;grid-template-columns:1fr 1fr;gap:8px}#home.compact .path{padding:12px}#home.compact .path svg{width:20px;height:20px}#home.compact .path strong{font-size:1rem}#home.compact .path span{display:block;font-size:.82rem;line-height:1.35}}
+#home.compact .path strong{font-size:1.3rem}
+#home.compact .path span{display:block;font-size:1rem;line-height:1.4}
+@media(max-width:600px){#home.compact .paths{width:100%;grid-template-columns:1fr 1fr;gap:8px}#home.compact .path{padding:12px}#home.compact .path svg{width:20px;height:20px}#home.compact .path strong{font-size:1.15rem}#home.compact .path span{display:block;font-size:.92rem;line-height:1.35}}
 @media(prefers-reduced-motion:reduce){*,::backdrop{animation:none!important;transition:none!important}}
