@@ -2,7 +2,7 @@
 'use strict';
 (() => {
   const rows = [
-    ['Descriptive Statistics Generator','Descriptive Statistics Generator','Descriptive Statistics Generator','Descriptive Statistics Generator'],
+    ['Data Analysis Assistant','Data Analysis Assistant','Data Analysis Assistant','Data Analysis Assistant'],
     ['Upload a CSV or Excel workbook to generate descriptive statistics.','Importez un fichier CSV ou Excel pour générer des statistiques descriptives.','Suba un archivo CSV o Excel para generar estadísticas descriptivas.','Загрузите файл CSV или Excel, чтобы получить описательную статистику.'],
     ['Transform your clinical data into tables and visualizations!','Transformez vos données cliniques en tableaux et en visualisations !','¡Transforme sus datos clínicos en tablas y visualizaciones!','Преобразуйте клинические данные в таблицы и визуализации!'],
     /* About page translation retained but inactive: ['About the Author','À propos de l’auteur','Acerca del autor','Об авторе'] */ ['Restart Analysis','Recommencer l’analyse','Reiniciar análisis','Начать анализ заново'],
@@ -162,7 +162,7 @@
     }
     const attrs = ['aria-label','aria-description','title','placeholder'];
     root.querySelectorAll?.('*').forEach(el => { if (preserve(el)) return; let saved = sourceAttrs.get(el); if (!saved) { saved = {}; sourceAttrs.set(el,saved); } for (const a of attrs) if (el.hasAttribute(a)) { if (!(a in saved)) saved[a] = reverse.get(el.getAttribute(a)) || el.getAttribute(a); const val = text(saved[a]); if (val !== el.getAttribute(a)) el.setAttribute(a,val); } });
-    document.documentElement.lang = current; document.title = text('Descriptive Statistics Generator');
+    document.documentElement.lang = current; document.title = text('Data Analysis Assistant');
     document.querySelectorAll('[data-locale]').forEach(b => { const active = selected && b.dataset.locale === current; b.setAttribute('aria-pressed', String(active)); b.classList.toggle('selected', active); });
   }
   function markup(svg, rawValues = []) {

@@ -1,4 +1,4 @@
-# Descriptive Statistics Generator — UX optimized copy
+# Data Analysis Assistant — UX optimized copy
 
 This folder is a separate static copy of the website. It can be opened by opening `index.html` in a current browser or served as a static site. No install or build step is required.
 
