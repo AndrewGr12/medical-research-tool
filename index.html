@@ -10,19 +10,31 @@
 <main class="wrap fade-in">
   <header class="page-header">
     <div>
-      <h1>Descriptive Statistics Generator</h1>
-      <p class="sub">Upload a CSV or Excel workbook to generate descriptive statistics.</p>
+      <h1 data-raw>Descriptive Statistics Generator</h1>
     </div>
-    <div class="header-actions"><button type="button" id="aboutOpen" class="btn">About the Author</button><button type="button" id="restart" class="btn primary">Restart Analysis</button></div>
+    <div class="header-actions"><!-- About the Author navigation temporarily disabled; retained for future use.
+    <button type="button" id="aboutOpen" class="btn">About the Author</button>
+    --><button type="button" id="restart" class="btn primary">Restart Analysis</button></div>
   </header>
 
-  <section id="landing" aria-label="Upload">
+  <section class="language-picker" aria-label="Choose your language">
+    <p id="languagePrompt" class="note">Choose your language to continue</p>
+    <div class="language-options" role="group" aria-label="Application language">
+      <button type="button" class="btn" data-locale="en" aria-pressed="false"><svg class="language-flag" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" fill="#fff"/><path fill="#b22234" d="M0 0h28v1.54H0zm0 3.08h28v1.54H0zm0 3.08h28V7.7H0zm0 3.08h28v1.54H0zm0 3.08h28v1.54H0zm0 3.08h28v1.54H0zm0 3.08h28V20H0z"/><rect width="12" height="10.8" fill="#3c3b6e"/><g fill="#fff"><circle cx="2" cy="2" r=".55"/><circle cx="5" cy="2" r=".55"/><circle cx="8" cy="2" r=".55"/><circle cx="11" cy="2" r=".55"/><circle cx="3.5" cy="4.7" r=".55"/><circle cx="6.5" cy="4.7" r=".55"/><circle cx="9.5" cy="4.7" r=".55"/><circle cx="2" cy="7.5" r=".55"/><circle cx="5" cy="7.5" r=".55"/><circle cx="8" cy="7.5" r=".55"/><circle cx="11" cy="7.5" r=".55"/></g><rect x=".25" y=".25" width="27.5" height="19.5" rx="1.6" fill="none" stroke="#000" stroke-opacity=".16"/></svg>English</button>
+      <button type="button" class="btn" data-locale="fr" aria-pressed="false"><svg class="language-flag" viewBox="0 0 28 20" aria-hidden="true"><rect width="9.34" height="20" fill="#002395"/><rect x="9.34" width="9.33" height="20" fill="#fff"/><rect x="18.67" width="9.33" height="20" fill="#ed2939"/><rect x=".25" y=".25" width="27.5" height="19.5" rx="1.6" fill="none" stroke="#000" stroke-opacity=".16"/></svg>Français</button>
+      <button type="button" class="btn" data-locale="es" aria-pressed="false"><svg class="language-flag" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" fill="#aa151b"/><rect y="5" width="28" height="10" fill="#f1bf00"/><path d="M8 7h2.3v5.8H8z" fill="#aa151b"/><path d="M8.5 7.8h1.3v1.5H8.5z" fill="#f1bf00"/><rect x=".25" y=".25" width="27.5" height="19.5" rx="1.6" fill="none" stroke="#000" stroke-opacity=".16"/></svg>Español</button>
+      <button type="button" class="btn" data-locale="ru" aria-pressed="false"><svg class="language-flag" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="6.67" fill="#fff"/><rect y="6.67" width="28" height="6.66" fill="#0039a6"/><rect y="13.33" width="28" height="6.67" fill="#d52b1e"/><rect x=".25" y=".25" width="27.5" height="19.5" rx="1.6" fill="none" stroke="#000" stroke-opacity=".16"/></svg>Русский</button>
+    </div>
+  </section>
+  <p id="siteSubtitle" class="sub" hidden>Transform your clinical data into tables and visualizations!</p>
+
+  <section id="landing" aria-label="Upload" hidden>
     <label class="drop" id="drop" for="file">
-      <input type="file" id="file" accept=".csv,.xlsx,.xls,.xlsm,.xlsb,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+      <input type="file" id="file" aria-label="Choose a CSV or Excel file" aria-describedby="upload-guidance" accept=".csv,.xlsx,.xls,.xlsm,.xlsb,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
       <strong>Drop a CSV or Excel file here, or click to choose a file</strong>
-      <span>For CSV or Excel files, the first row must contain column names. Choose a worksheet when an Excel workbook has multiple sheets.</span>
+      <span id="upload-guidance">Check that your data is clean, accurate, and consistently formatted before uploading.<br>The first row must contain column names; choose a worksheet if your Excel workbook has multiple sheets.</span>
     </label>
-    <p class="actions"><button type="button" id="sample" class="btn">Try sample data</button></p>
+    <p class="actions"><button type="button" id="sample" class="btn primary">Try sample data</button></p>
   </section>
 
   <p id="status" class="status" role="status" aria-live="polite"></p>
@@ -37,7 +49,7 @@
       <button type="button" id="reset" class="btn">Remove file</button>
     </section>
 
-    <div id="warnings" class="warn" hidden></div>
+    <div id="warnings" class="warn" role="status" aria-live="polite" aria-atomic="true" hidden></div>
     <!-- Patient ID notice banner disabled by request: <div id="patientNotice" class="warn patient-notice" role="status" hidden></div> -->
 
     <div id="home">
@@ -56,8 +68,8 @@
       <h2 id="h-summary">Summary statistics</h2>
       <div class="toolbar">
         <span class="spacer"></span>
-        <details class="menu">
-          <summary class="btn">Export</summary>
+        <details class="menu" id="exportMenu">
+          <summary class="btn primary">Export</summary>
           <div class="menupanel">
             <button type="button" class="btn" id="copyTable">Copy table</button>
             <button type="button" class="btn" id="dlCsv">Download CSV</button>
@@ -66,7 +78,9 @@
             <p id="exportScope" class="note"></p>
           </div>
         </details>
+        <!-- Copy for manuscript action is temporarily disabled, retained for future use.
         <button type="button" class="btn primary" id="copyMs">Copy for manuscript</button>
+        -->
       </div>
 
       <details class="settings">
@@ -88,7 +102,7 @@
         <div id="catSettings" class="cat-settings" aria-label="Categorical variable summary settings"></div>
       </details>
 
-      <div class="tablewrap">
+      <div class="tablewrap" role="region" tabindex="0" aria-label="Scrollable summary statistics table">
         <table id="stats">
           <caption class="sr">Summary statistics and counts for detected variables</caption>
           <thead>
@@ -124,20 +138,25 @@
         </select>
         <label><input type="checkbox" id="t1showPValues"> Show exploratory p-values</label>
         <label><input type="checkbox" id="t1overall" checked> Overall column</label>
+        <!-- Table 1 Copy action temporarily disabled; retained for future use.
         <button type="button" class="btn" id="t1copy">Copy</button>
-        <button type="button" class="btn" id="t1csv">Download CSV</button>
-        <button type="button" class="btn" id="t1docx">Download Word</button>
+        -->
+        <button type="button" class="btn primary" id="t1csv">Download CSV</button>
+        <button type="button" class="btn primary" id="t1docx">Download Word</button>
       </div>
-      <div class="tablewrap"><table id="t1"><caption class="sr">Table 1 baseline characteristics</caption></table></div>
+      <div class="tablewrap" role="region" tabindex="0" aria-label="Scrollable Table 1 baseline characteristics"><table id="t1"><caption class="sr">Table 1 baseline characteristics</caption></table></div>
       <ul id="t1notes" class="note"></ul>
     </details>
 
+    <!-- Variable types section temporarily disabled, retained for future use.
     <details class="section">
       <summary>Variable types</summary>
       <p class="note">Override automatic detection (e.g., 0/1 treatment codes or numeric IDs). Original values are never changed.</p>
       <div class="tablewrap"><table id="types"></table></div>
     </details>
+    -->
 
+    <!-- Methodology section temporarily disabled, retained for future use.
     <details class="section">
       <summary>Methodology</summary>
       <ul class="note">
@@ -148,11 +167,14 @@
         <li><strong>Missing</strong> = blank, NA, N/A, NaN, null, missing, “.” or “-”. In columns analyzed as numeric, non-numeric entries are also counted as missing and excluded from numeric summaries and comparisons. Per-variable non-missing N is shown in Table 1.</li>
       </ul>
     </details>
+    -->
 
+    <!-- Data preview section temporarily disabled, retained for future use.
     <details class="section">
       <summary>Data preview</summary>
       <div class="tablewrap"><table id="preview"></table></div>
     </details>
+    -->
 
     <!-- Categorical variables section hidden at user request; kept here for future use.
     <details class="section">
@@ -181,21 +203,22 @@
     </div>
   </div>
 
+  <!-- About the Author page temporarily disabled; retained for future use.
   <section id="aboutPage" class="about-page" aria-labelledby="aboutTitle" hidden>
     <div class="about-heading"><h2 id="aboutTitle" tabindex="-1">About the Author</h2><button type="button" class="btn primary" id="aboutBack">Back to the app</button></div>
     <article class="author-card">
       <img src="andrew-gregory.png" alt="Professional portrait of Andrew Gregory, MD" class="author-photo">
       <div><h3>Andrew Gregory, MD</h3></div>
     </article>
-    <!-- Future author placeholder:
+    Future author placeholder:
     <article class="author-card">
       <img src="future-author.png" alt="Professional portrait of [Author Name]" class="author-photo">
       <div><h3>[Author Name, Credentials]</h3><p>[Short author biography]</p></div>
     </article>
-    -->
   </section>
+  -->
 
-  <footer class="privacy"><span>Files are processed locally in your browser and are not uploaded. Excel support loads the SheetJS parser from its CDN; workbook data stays on your device. Local processing alone does not ensure HIPAA or institutional compliance.</span><span class="copyright">© <span id="copyrightYear">2026</span> Descriptive Statistics Generator</span></footer>
+  <footer class="privacy"><span>Files are processed locally in your browser and are not uploaded. Excel support loads the SheetJS parser from its CDN; workbook data stays on your device. Local processing alone does not ensure HIPAA or institutional compliance.</span><span class="copyright" data-raw>© <span id="copyrightYear">2026</span> Descriptive Statistics Generator</span></footer>
 </main>
 
 <dialog id="sheetPrompt" aria-labelledby="sheetTitle" aria-describedby="sheetDescription">
@@ -224,6 +247,7 @@
   <form method="dialog"><button class="btn primary" autofocus>Close</button></form>
 </dialog>
 
+<script src="locales.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

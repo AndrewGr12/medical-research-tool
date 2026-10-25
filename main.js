@@ -28,7 +28,7 @@ function loadSheetJS() {
   return sheetJsPromise;
 }
 const state = { view: 'home', fig: null, patientId: '', types: {}, choices: {}, t1: { group: '', overall: true, testMode: 'parametric', showPValues: false, skip: new Set(), selected: new Set(), catChoices: {} }, expandedCategoricals: new Set(), excluded: [], cols: [], baseWarnings: [], fileName: '', headers: [], rows: [], results: [], categorical: [], sortKey: null, sortDir: 1 };
-let aboutReturnState = null;
+// About page state retained for future use: let aboutReturnState = null;
 
 // ---------- CSV parsing (RFC 4180-style state machine) ----------
 function parseCSV(text) {
@@ -73,6 +73,14 @@ function uniqueNames(headers) {
     used.add(name);
     return name;
   });
+}
+
+function headerNameWarning(headers) {
+  const raw = headers.map(h => String(h ?? '').trim());
+  const normalized = uniqueNames(raw);
+  return raw.some((name, i) => !name || name !== normalized[i])
+    ? 'Some column names were blank or duplicated, so the app assigned unique names. Review them before interpreting results.'
+    : '';
 }
 
 // ---------- Statistics ----------
@@ -122,14 +130,15 @@ function decimalsFor(r) {
 function fmt(x, d) {
   if (x === null || x === undefined || !isFinite(x)) return '—';
   if (Math.abs(x) >= 1e15) return x.toExponential(2);
-  const s = x.toFixed(d);
-  return Number(s) === 0 ? (0).toFixed(d) : s; // avoid "-0.0"
+  const value = Number(x.toFixed(d)) === 0 ? 0 : x;
+  return new Intl.NumberFormat(window.AppI18n?.locale || 'en-US', { minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: false }).format(value);
 }
+const localFixed = (x, d) => new Intl.NumberFormat(window.AppI18n?.locale || 'en-US', { minimumFractionDigits: d, maximumFractionDigits: d, useGrouping: false }).format(x);
 function fmtSummary(s, method, d) {
   return method === 'Mean (SD)' ? `${fmt(s.mean, d)} (${fmt(s.sd, d)})` : `${fmt(s.median, d)} (${fmt(s.q1, d)}–${fmt(s.q3, d)})`;
 }
 function summaryText(r) { return fmtSummary(r, r.method, decimalsFor(r)); }
-const missingText = r => `${r.missing} (${r.missingPct.toFixed(1)}%)`;
+const missingText = r => `${r.missing.toLocaleString(window.AppI18n?.locale || 'en-US')} (${localFixed(r.missingPct, 1)}%)`;
 
 // ---------- Column analysis ----------
 function analyzeColumn(name, idx, rows, warnings, forced) {
@@ -156,16 +165,16 @@ function analyzeColumn(name, idx, rows, warnings, forced) {
     const nonNum = rawNonMissing - vals.length;
     missing += nonNum;
     const nonMissing = total - missing, missingPct = (missing / total) * 100;
-    if (missingPct >= CONFIG.HIGH_MISSING * 100) warnings.push(`“${name}” has ${missingPct.toFixed(0)}% missing values, including non-numeric entries.`);
+    if (missingPct >= CONFIG.HIGH_MISSING * 100) warnings.push(`“${name}” has ${localFixed(missingPct, 0)}% missing values, including non-numeric entries.`);
     if (nonNum) warnings.push(`“${name}”: ${nonNum} non-numeric value(s) were counted as missing.`);
     const s = computeStats(vals), auto = chooseMethod(s);
     if (s.sd === 0) warnings.push(`“${name}” is constant.`);
     const distinct = new Set(vals).size;
-    if (!forced && vals.length > 1 && distinct <= 5 && vals.every(Number.isInteger)) warnings.push(`“${name}” has only ${distinct} distinct integer values; it may be categorical (see Variable types).`);
+    if (!forced && vals.length > 1 && distinct <= 5 && vals.every(Number.isInteger)) warnings.push(`“${name}” has only ${distinct} distinct integer values; it may be categorical.`);
     return { type: 'numeric', name, nums, missing, missingPct, autoMethod: auto, choice: 'auto', method: auto, ...s };
   }
   const nonMissing = rawNonMissing, missingPct = (missing / total) * 100;
-  if (missingPct >= CONFIG.HIGH_MISSING * 100) warnings.push(`“${name}” has ${missingPct.toFixed(0)}% missing values.`);
+  if (missingPct >= CONFIG.HIGH_MISSING * 100) warnings.push(`“${name}” has ${localFixed(missingPct, 0)}% missing values.`);
   const freq = new Map();   // exact (trimmed, case-sensitive) labels as strings
   raw.forEach(s => { if (s !== null) freq.set(s, (freq.get(s) || 0) + 1); });
   if (freq.size === nonMissing && nonMissing > 20) warnings.push(`“${name}” has all-distinct values (possible identifier).`);
@@ -190,8 +199,8 @@ async function analyzeAll(headers, rows) {
 }
 
 // ---------- Loading ----------
-function setStatus(msg) { $('status').textContent = msg; }
-function showError(msg) { const e = $('error'); e.textContent = msg; e.hidden = !msg; }
+function setStatus(msg) { $('status').textContent = window.AppI18n?.text(msg) || msg; }
+function showError(msg) { const e = $('error'); e.textContent = window.AppI18n?.text(msg) || msg; e.hidden = !msg; }
 
 function suggestPatientId(headers, rows) {
   const namePattern = /(^|[^a-z])(patient\s*id|patientid|mrn|medical\s*record|subject\s*id|participant\s*id|record\s*id|case\s*id)([^a-z]|$)/i;
@@ -232,6 +241,8 @@ async function loadText(text, name, options = {}) {
     const headers = uniqueNames(all[0]);
     const rows = all.slice(1);
     const warnings = [];
+    const headerWarning = headerNameWarning(all[0]);
+    if (headerWarning) warnings.push(headerWarning);
     if (unterminatedQuote) warnings.push('The file ends inside an unclosed quote; the last row may be malformed.');
     const ragged = rows.filter(r => r.length !== headers.length).length;
     if (ragged) warnings.push(`${ragged} row(s) had a different number of cells than the header; missing cells were treated as empty and extras ignored.`);
@@ -298,20 +309,24 @@ async function handleFile(file) {
 function renderAll(warnings) {
   if ($('results').hidden) fadeHide($('landing'), () => { fadeShow($('results')); const h = $('home').querySelector('[data-h]'); if (h) h.focus(); });
   $('fname').textContent = state.fileName;
+  $('fname').setAttribute('data-raw', '');
   $('fstats').innerHTML = [['Rows', state.rows.length], ['Columns', state.headers.length], ['Numeric', state.results.length], ['Categorical', state.categorical.length], ['Excluded', state.excluded.length]]
-    .map(([k, v]) => `<div><dt>${k}</dt><dd>${v.toLocaleString()}</dd></div>`).join('');
+    .map(([k, v]) => `<div><dt>${k}</dt><dd>${v.toLocaleString(window.AppI18n?.locale || 'en-US')}</dd></div>`).join('');
   const w = $('warnings');
   w.hidden = !warnings.length;
   w.innerHTML = warnings.length ? `<strong>Notes</strong><ul>${warnings.slice(0, 30).map(x => `<li>${esc(x)}</li>`).join('')}${warnings.length > 30 ? `<li>…and ${warnings.length - 30} more.</li>` : ''}</ul>` : '';
-  renderPreview(); renderTable(); renderCategorical(); renderTypes(); fillGroupSelect(); renderT1(); figRefresh();
+  /* renderPreview(); renderTypes(); */
+  renderTable(); renderCategorical(); fillGroupSelect(); renderT1(); figRefresh();
 }
 
+/* Data preview renderer retained for future use.
 function renderPreview() {
   const rows = state.rows.slice(0, CONFIG.PREVIEW_ROWS);
   const cols = state.headers.map((h, i) => [h, i]).filter(([h]) => h !== state.patientId);
   $('preview').innerHTML = `<thead><tr>${cols.map(([h]) => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     rows.map(r => `<tr>${cols.map(([, i]) => `<td>${esc(r[i] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>`;
 }
+*/
 
 function getView() {
   let v = state.cols.filter(r => r.type !== 'excluded');
@@ -339,7 +354,7 @@ function categoricalMode(r) { const choice = state.t1.catChoices[r.name] || 'aut
 function categoricalLevels(r) {
   const mode = categoricalMode(r), levels = [...r.freq].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, { numeric: true }));
   return levels.map(([label, n]) => {
-    const pct = r.nonMissing ? (100 * n / r.nonMissing).toFixed(1) + '%' : '—';
+    const pct = r.nonMissing ? localFixed(100 * n / r.nonMissing, 1) + '%' : '—';
     const value = mode === 'counts' ? String(n) : mode === 'percentage' ? pct : `${n} (${pct})`;
     return `${label}: ${value}`;
   });
@@ -352,7 +367,7 @@ function summaryCell(r) {
   if (!levels.length) return '—';
   const expanded = state.expandedCategoricals.has(r.name), shown = expanded ? levels : levels.slice(0, 8);
   const toggle = levels.length > 8 ? `<button type="button" class="btn cat-expand" data-expand-cat="${esc(r.name)}" aria-expanded="${expanded}">${expanded ? 'Show fewer' : `Show all (${levels.length})`}</button>` : '';
-  return `${shown.map(esc).join('<br>')}${toggle}`;
+  return `${shown.map(level => `<span data-raw>${esc(level)}</span>`).join('<br>')}${toggle}`;
 }
 function categoryMethodSelect(r) {
   const choice = state.t1.catChoices[r.name] || 'auto';
@@ -363,7 +378,7 @@ function categoryMethodSelect(r) {
 function renderTable() {
   const view = getView();
   $('stats').querySelector('tbody').innerHTML = view.length ? view.map(r => `<tr${r.type === 'numeric' ? ' tabindex="0"' : ''} data-name="${esc(r.name)}" data-type="${r.type}"${r.type === 'numeric' ? ` aria-label="Details for ${esc(r.name)}"` : ''}>
-    <td>${esc(r.name)}</td><td class="num">${(r.type === 'numeric' ? r.n : r.nonMissing).toLocaleString()}</td><td class="num">${missingText(r)}</td><td class="summary-cell">${summaryCell(r)}</td><td>${r.type === 'numeric' ? methodSelect(r) : categoryMethodSelect(r)}</td></tr>`).join('')
+    <td>${esc(r.name)}</td><td class="num">${(r.type === 'numeric' ? r.n : r.nonMissing).toLocaleString(window.AppI18n?.locale || 'en-US')}</td><td class="num">${missingText(r)}</td><td class="summary-cell">${summaryCell(r)}</td><td>${r.type === 'numeric' ? methodSelect(r) : categoryMethodSelect(r)}</td></tr>`).join('')
     : `<tr><td colspan="5">No summary variables are available.</td></tr>`;
   document.querySelectorAll('#stats th[aria-sort]').forEach(th => {
     const b = th.querySelector('button');
@@ -389,7 +404,7 @@ function showDetail(name) {
   const f = x => fmt(x, d);
 
   const rowsData = [
-    ['N', r.n.toLocaleString()],
+    ['N', r.n.toLocaleString(window.AppI18n?.locale || 'en-US')],
     ['Missing', missingText(r)],
     ['Mean', f(r.mean)],
     ['SD', f(r.sd)],
@@ -405,6 +420,8 @@ function showDetail(name) {
   ];
 
   $('dtitle').textContent = r.name;
+  $('dtitle').dataset.variable = r.name;
+  $('dtitle').setAttribute('data-raw', '');
 
   $('dbody').innerHTML = rowsData
     .map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`)
@@ -471,7 +488,7 @@ function drawBoxPlot(r) {
   ctx.fillStyle = '#1d2430';
   ctx.font = '600 15px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('Box plot (whiskers span min to max; no outlier rule)', cssWidth / 2, 20);
+  ctx.fillText(window.AppI18n?.text('Box plot (whiskers span min to max; no outlier rule)') || 'Box plot (whiskers span min to max; no outlier rule)', cssWidth / 2, 20);
 
   // Axis
   ctx.strokeStyle = '#aab3bf';
@@ -573,16 +590,16 @@ function drawBoxPlot(r) {
 
   ctx.fillStyle = '#5b6573';
 
-  ctx.fillText('Min', xMin, labelY);
-  ctx.fillText('Q1', xQ1, labelY);
-  ctx.fillText('Median', xMed, labelY);
-  ctx.fillText('Q3', xQ3, labelY);
-  ctx.fillText('Max', xMax, labelY);
+  ctx.fillText(window.AppI18n?.text('Min') || 'Min', xMin, labelY);
+  ctx.fillText(window.AppI18n?.text('Q1') || 'Q1', xQ1, labelY);
+  ctx.fillText(window.AppI18n?.text('Median') || 'Median', xMed, labelY);
+  ctx.fillText(window.AppI18n?.text('Q3') || 'Q3', xQ3, labelY);
+  ctx.fillText(window.AppI18n?.text('Max') || 'Max', xMax, labelY);
 }
 
 // ---------- Export ----------
-const tableRows = () => [['Variable', 'N', 'Missing', 'Summary', 'Summary method'],
-  ...getView().map(r => [safe(r.name), r.type === 'numeric' ? r.n : r.nonMissing, missingText(r), safe(summaryValue(r)), r.type === 'numeric' ? r.method : (({ auto: 'Auto: Counts (percentage)', counts: 'Counts', percentage: 'Percentage', counts_percentage: 'Counts (percentage)' })[state.t1.catChoices[r.name] || 'auto'])])];
+const tableRows = () => [['Variable', 'N', 'Missing', 'Summary', 'Summary method'].map(x => window.AppI18n?.text(x) || x),
+  ...getView().map(r => [safe(r.name), r.type === 'numeric' ? r.n : r.nonMissing, missingText(r), safe(summaryValue(r)), window.AppI18n?.text(r.type === 'numeric' ? (r.choice === 'auto' ? `Auto: ${r.autoMethod}` : r.method) : (({ auto: 'Auto: Counts (percentage)', counts: 'Counts', percentage: 'Percentage', counts_percentage: 'Counts (percentage)' })[state.t1.catChoices[r.name] || 'auto'])) || (r.type === 'numeric' ? r.method : state.t1.catChoices[r.name] || 'auto')])];
 const csvCell = v => /[",\n\r]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
 
 async function copyText(text, okMsg) {
@@ -641,6 +658,7 @@ function sampleCSV() {
 const safe = s => /^\s*[=+\-@]/.test(String(s)) ? `'${s}` : String(s);   // export-only guard against spreadsheet formula injection
 const tsvCell = v => String(v).replace(/[\t\r\n]+/g, ' ');
 
+/* Variable type override workflow retained for future use.
 async function reanalyze() {
   setStatus('Recalculating…');
   const a = await analyzeAll(state.headers, state.rows);
@@ -655,9 +673,10 @@ function renderTypes() {
   const opts = c => [['auto', 'Auto'], ['numeric', 'Numeric'], ['categorical', 'Categorical'], ['exclude', 'Exclude']]
     .map(([v, l]) => `<option value="${v}"${(state.types[c.name] || 'auto') === v ? ' selected' : ''}>${l}</option>`).join('');
   $('types').innerHTML = `<thead><tr><th scope="col">Variable</th><th scope="col">Current</th><th scope="col">Type</th><th scope="col">In Table 1</th></tr></thead><tbody>${
-    state.cols.map(c => `<tr><td>${esc(c.name)}</td><td>${c.empty ? 'Empty (skipped)' : c.type === 'excluded' ? 'Excluded' : c.type}</td><td><select class="method" data-tname="${esc(c.name)}" aria-label="Type of ${esc(c.name)}">${opts(c)}</select></td><td><input type="checkbox" data-t1="${esc(c.name)}" aria-label="Include ${esc(c.name)} in Table 1"${state.t1.skip.has(c.name) ? '' : ' checked'}${c.type === 'excluded' ? ' disabled' : ''}></td></tr>`).join('')}</tbody>`;
+    state.cols.map(c => `<tr><td data-raw>${esc(c.name)}</td><td>${c.empty ? 'Empty (skipped)' : c.type === 'excluded' ? 'Excluded' : c.type}</td><td><select class="method" data-tname="${esc(c.name)}" aria-label="Type of ${esc(c.name)}">${opts(c)}</select></td><td><input type="checkbox" data-t1="${esc(c.name)}" aria-label="Include ${esc(c.name)} in Table 1"${state.t1.skip.has(c.name) ? '' : ' checked'}${c.type === 'excluded' ? ' disabled' : ''}></td></tr>`).join('')}</tbody>`;
   if (f) { const el = [...$('types').querySelectorAll('select')].find(e => e.dataset.tname === f); if (el) el.focus(); }
 }
+*/
 
 function freqTable(v) {
   const rows = [...v.freq].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, { numeric: true }));
@@ -665,9 +684,9 @@ function freqTable(v) {
   box.className = 'tablewrap'; note.className = 'note'; btn.type = 'button'; btn.className = 'btn'; box.append(tbl); wrap.append(box, note, btn);
   const draw = limit => {
     tbl.innerHTML = `<thead><tr><th scope="col">Category</th><th scope="col" class="num">n (%)</th></tr></thead><tbody>${rows.slice(0, limit).map(([k, n]) =>
-      `<tr><td>${esc(k)}</td><td class="num">${n.toLocaleString()} (${(100 * n / v.nonMissing).toFixed(1)}%)</td></tr>`).join('')}</tbody>`;
+      `<tr><td data-raw>${esc(k)}</td><td class="num">${n.toLocaleString(window.AppI18n?.locale || 'en-US')} (${localFixed(100 * n / v.nonMissing, 1)}%)</td></tr>`).join('')}</tbody>`;
     const hidden = Math.max(0, rows.length - limit);
-    note.textContent = `Denominator: ${v.nonMissing.toLocaleString()} non-missing; ${v.missing.toLocaleString()} missing excluded.${hidden ? ` Showing ${limit} of ${rows.length} levels.` : ''}`;
+    note.textContent = `Denominator: ${v.nonMissing.toLocaleString(window.AppI18n?.locale || 'en-US')} non-missing; ${v.missing.toLocaleString(window.AppI18n?.locale || 'en-US')} missing excluded.${hidden ? ` Showing ${limit} of ${rows.length} levels.` : ''}`;
     btn.hidden = !hidden; btn.textContent = `Show all ${rows.length} levels`;
   };
   btn.addEventListener('click', () => draw(Infinity)); draw(CONFIG.FREQ_LIMIT);
@@ -681,7 +700,7 @@ function renderCategorical() {
   box.replaceChildren();
   c.filter(v => !q || v.name.toLowerCase().includes(q)).forEach(v => {
     const d = document.createElement('details'), s = document.createElement('summary');
-    s.textContent = `${v.name}: ${v.unique.toLocaleString()} level${v.unique === 1 ? '' : 's'}, ${v.missing.toLocaleString()} missing (${v.missingPct.toFixed(1)}%)`;
+    s.textContent = `${v.name}: ${v.unique.toLocaleString(window.AppI18n?.locale || 'en-US')} level${v.unique === 1 ? '' : 's'}, ${v.missing.toLocaleString(window.AppI18n?.locale || 'en-US')} missing (${localFixed(v.missingPct, 1)}%)`;
     d.append(s);
     d.addEventListener('toggle', () => { if (d.open && !d.dataset.done) { d.dataset.done = '1'; d.append(freqTable(v)); } });
     box.append(d);
@@ -691,16 +710,16 @@ function renderCategorical() {
 
 function fillGroupSelect() {
   if (!state.categorical.some(c => c.name === state.t1.group)) state.t1.group = '';
-  $('t1group').innerHTML = '<option value="">None</option>' + state.categorical.map(c => `<option value="${esc(c.name)}"${c.name === state.t1.group ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+  $('t1group').innerHTML = '<option value="">None</option>' + state.categorical.map(c => `<option data-raw value="${esc(c.name)}"${c.name === state.t1.group ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
   const selectable = state.headers.filter(name => name !== state.patientId);
-  $('t1variables').innerHTML = selectable.map(name => `<label class="t1-variable"><input type="checkbox" data-t1-variable="${esc(name)}"${state.t1.selected.has(name) ? ' checked' : ''}><span>${esc(name)}</span></label>`).join('');
+  $('t1variables').innerHTML = selectable.map(name => `<label class="t1-variable"><input type="checkbox" data-t1-variable="${esc(name)}"${state.t1.selected.has(name) ? ' checked' : ''}><span data-raw>${esc(name)}</span></label>`).join('');
   $('t1variablesLabel').textContent = `Select variables (${state.t1.selected.size}/${selectable.length})`;
   renderCategoricalSettings();
 }
 
 function renderCategoricalSettings() {
   const options = [['auto', 'Auto: Counts (percentage)'], ['counts', 'Counts'], ['percentage', 'Percentage'], ['counts_percentage', 'Counts (percentage)']];
-  $('catSettings').innerHTML = state.categorical.map(r => '<label class="cat-setting"><span>' + esc(r.name) + '</span><select class="method" data-cat-method="' + esc(r.name) + '" aria-label="Summary format for ' + esc(r.name) + '">' + options.map(([v, label]) => '<option value="' + v + '"' + ((state.t1.catChoices[r.name] || 'auto') === v ? ' selected' : '') + '>' + label + '</option>').join('') + '</select></label>').join('') || '<p class="note">No categorical variables were detected.</p>';
+  $('catSettings').innerHTML = state.categorical.map(r => '<label class="cat-setting"><span data-raw>' + esc(r.name) + '</span><select class="method" data-cat-method="' + esc(r.name) + '" aria-label="Summary format for ' + esc(r.name) + '">' + options.map(([v, label]) => '<option value="' + v + '"' + ((state.t1.catChoices[r.name] || 'auto') === v ? ' selected' : '') + '>' + label + '</option>').join('') + '</select></label>').join('') || '<p class="note">No categorical variables were detected.</p>';
 }
 
 // ---------- Group comparison tests (kept independent of Table 1 rendering) ----------
@@ -764,7 +783,7 @@ function fTail(x, df1, df2) { return x < 0 || df1 <= 0 || df2 <= 0 ? NaN : regul
 function finiteTest(p, method, reason = '') {
   return { p: Number.isFinite(p) && p >= 0 && p <= 1 ? p : null, method, reason: Number.isFinite(p) && p >= 0 && p <= 1 ? '' : (reason || 'The test returned a non-finite or out-of-range result.') };
 }
-function pText(result) { return result.p === null ? 'NA' : result.p < 0.001 ? '<0.001' : result.p.toFixed(3); }
+function pText(result) { return result.p === null ? 'NA' : result.p < 0.001 ? `<${localFixed(0.001, 3)}` : localFixed(result.p, 3); }
 function pTitle(result) { return result.p === null ? `${result.method}: ${result.reason}` : `${result.method}; complete observations only.`; }
 function meanVariance(x) {
   const n = x.length, mean = x.reduce((a, b) => a + b, 0) / n;
@@ -890,7 +909,7 @@ function fisherFreemanHalton(table, limit = 40000) {
     allocate(0, rowMargins[i]);
   }
   nextRow(0);
-  if (exceeded || !weights.length) return finiteTest(NaN, 'Fisher–Freeman–Halton exact test', `The conditional table space exceeds ${limit.toLocaleString()} tables, so a reliable exact p-value was not computed.`);
+  if (exceeded || !weights.length) return finiteTest(NaN, 'Fisher–Freeman–Halton exact test', `The conditional table space exceeds ${limit.toLocaleString(window.AppI18n?.locale || 'en-US')} tables, so a reliable exact p-value was not computed.`);
   const max = Math.max(...weights.map(w => w.logw)), denominator = weights.reduce((s, w) => s + Math.exp(w.logw - max), 0);
   const numerator = weights.filter(w => w.logw <= observedLogWeight + 1e-10).reduce((s, w) => s + Math.exp(w.logw - max), 0);
   return finiteTest(Math.min(1, numerator / denominator), 'Fisher–Freeman–Halton exact test (conditional probability ordering)');
@@ -928,7 +947,7 @@ function buildTable1() {
   }
   const includeTests = Boolean(g && state.t1.showPValues);
   const p = test => includeTests ? pText(test) : '';
-  const rows = [['N', ...sets.map(s => s.idx.length.toLocaleString()), ...(includeTests ? [''] : [])]];
+  const rows = [['N', ...sets.map(s => s.idx.length.toLocaleString(window.AppI18n?.locale || 'en-US')), ...(includeTests ? [''] : [])]], rawRowIndices = new Set();
   pvalueInfo.push('');
   let capped = 0;
   for (const c of state.cols) {
@@ -940,7 +959,7 @@ function buildTable1() {
         const v = s.idx.map(i => c.nums[i]).filter(x => x !== null);
         return v.length ? fmtSummary(computeStats(v), method, d) : '—'; }), ...(includeTests ? [p(test)] : [])]);
       pvalueInfo.push(test ? pTitle(test) : '');
-      rows.push(['  Non-missing n', ...sets.map(s => s.idx.filter(i => c.nums[i] !== null).length.toLocaleString()), ...(includeTests ? [''] : [])]); pvalueInfo.push('');
+      rows.push(['  Non-missing n', ...sets.map(s => s.idx.filter(i => c.nums[i] !== null).length.toLocaleString(window.AppI18n?.locale || 'en-US')), ...(includeTests ? [''] : [])]); pvalueInfo.push('');
     } else {
       const mode = state.t1.catChoices[c.name] === 'counts' || state.t1.catChoices[c.name] === 'percentage' || state.t1.catChoices[c.name] === 'counts_percentage' ? state.t1.catChoices[c.name] : 'counts_percentage';
       const label = mode === 'counts' ? 'counts' : mode === 'percentage' ? 'percentage' : 'counts (percentage)';
@@ -950,8 +969,8 @@ function buildTable1() {
       const cnt = sets.map(s => { const m = new Map(); let den = 0; for (const i of s.idx) { const l = c.labels[i]; if (l !== null) { m.set(l, (m.get(l) || 0) + 1); den++; } } return { m, den }; });
       const lv = [...c.freq].sort((a, b) => b[1] - a[1] || nat(a[0], b[0]));
       if (lv.length > CONFIG.T1_MAX_LEVELS) { capped++; rows.push([`  ${lv.length} levels (not listed)`, ...sets.map(() => ''), ...(includeTests ? [''] : [])]); pvalueInfo.push(''); }
-      else lv.forEach(([k]) => { rows.push([`  ${k}`, ...cnt.map(x => { const n = x.m.get(k) || 0, pct = x.den ? (100 * n / x.den).toFixed(1) + '%' : '—'; return mode === 'counts' ? String(n) : mode === 'percentage' ? pct : x.den ? `${n} (${pct})` : '—'; }), ...(includeTests ? [''] : [])]); pvalueInfo.push(''); });
-      rows.push(['  Non-missing n', ...cnt.map(x => x.den.toLocaleString()), ...(includeTests ? [''] : [])]); pvalueInfo.push('');
+      else lv.forEach(([k]) => { rows.push([`  ${k}`, ...cnt.map(x => { const n = x.m.get(k) || 0, pct = x.den ? localFixed(100 * n / x.den, 1) + '%' : '—'; return mode === 'counts' ? n.toLocaleString(window.AppI18n?.locale || 'en-US') : mode === 'percentage' ? pct : x.den ? `${n.toLocaleString(window.AppI18n?.locale || 'en-US')} (${pct})` : '—'; }), ...(includeTests ? [''] : [])]); rawRowIndices.add(rows.length - 1); pvalueInfo.push(''); });
+      rows.push(['  Non-missing n', ...cnt.map(x => x.den.toLocaleString(window.AppI18n?.locale || 'en-US')), ...(includeTests ? [''] : [])]); pvalueInfo.push('');
     }
     const col = c.type === 'numeric' ? c.nums : c.labels;
     const ms = sets.map(s => s.idx.reduce((k, i) => k + (col[i] === null ? 1 : 0), 0));
@@ -960,22 +979,34 @@ function buildTable1() {
   if (g) notes.push(includeTests ? `Exploratory, unadjusted p-values compare complete observations across ${comparisonSets.length} non-missing groups; missing group labels are excluded from tests. They are not a measure of baseline balance or clinical importance, and no multiplicity adjustment is applied. Continuous summaries use ${state.t1.testMode === 'nonparametric' ? 'median (IQR)' : 'mean (SD)'}; Welch tests compare means, while Mann–Whitney/Kruskal–Wallis test rank distributions and do not specifically test medians. Categorical variables use one overall association test. Pearson chi-square requires no expected count below 1 and at least 80% of expected counts ≥5; sparse tables use exact tests when feasible. Hover or focus a p-value for the test and any limitation.` : 'Grouped summaries are descriptive. P-values are hidden by default; enable “Show exploratory p-values” only when an unadjusted group comparison is appropriate. These tests do not measure baseline balance or clinical importance.');
   else notes.push('Continuous: mean (SD) or median (IQR) as selected under Summary (Auto is a heuristic, not a normality test). Categorical: counts, percentages of non-missing values, or both as selected under Summary settings (Auto defaults to counts and percentages). Statistics use available observations; missing values are never treated as zero. Non-numeric entries in numeric variables are counted as missing.');
   if (capped) notes.push(`${capped} categorical variable(s) with more than ${CONFIG.T1_MAX_LEVELS} levels are not listed in this table.`);
-  return { header: ['Characteristic', ...sets.map(s => s.label), ...(includeTests ? ['Exploratory p-value'] : [])], rows, notes, pvalueInfo };
+  return { header: ['Characteristic', ...sets.map(s => s.label), ...(includeTests ? ['Exploratory p-value'] : [])], rows, notes, pvalueInfo, rawRowIndices };
 }
 
 function renderT1() {
   $('t1overall').disabled = !state.t1.group;
   $('t1showPValues').disabled = !state.t1.group;
   $('t1showPValues').checked = state.t1.showPValues;
-  $('t1variablesLabel').textContent = `Select variables (${state.t1.selected.size}/${state.headers.filter(name => name !== state.patientId).length})`;
+  $('t1variablesLabel').textContent = window.AppI18n?.text(`Select variables (${state.t1.selected.size}/${state.headers.filter(name => name !== state.patientId).length})`) || `Select variables (${state.t1.selected.size}/${state.headers.filter(name => name !== state.patientId).length})`;
   $('t1testMode').value = state.t1.testMode;
-  const t = buildTable1();
+  const t = localeTable1();
+  const groupLevels = new Set(state.categorical.find(c => c.name === state.t1.group)?.freq.keys() || []);
   const pIndex = t.header.length - 1, hasP = Boolean(state.t1.group && state.t1.showPValues);
-  $('t1').innerHTML = `<thead><tr>${t.header.map((h, i) => `<th scope="col"${i ? ' class="num"' : ''}>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
-    t.rows.map((r, ri) => `<tr>${r.map((v, i) => `<td class="${i ? 'num' : r[0].startsWith('  ') ? 'ind' : ''}"${hasP && i === pIndex && t.pvalueInfo[ri] ? ` title="${esc(t.pvalueInfo[ri])}" tabindex="0"` : ''}>${esc(v.trim())}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  $('t1').innerHTML = `<thead><tr>${t.header.map((h, i) => `<th scope="col"${i ? ' class="num"' : ''}${groupLevels.has(h) ? ' data-raw' : ''}>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
+    t.rows.map((r, ri) => `<tr>${r.map((v, i) => { const rawLevel = i === 0 && r[0].startsWith('  ') && !['Missing', 'Non-missing n'].includes(r[0].trim()); return `<td class="${i ? 'num' : r[0].startsWith('  ') ? 'ind' : ''}"${rawLevel ? ' data-raw' : ''}${hasP && i === pIndex && t.pvalueInfo[ri] ? ` title="${esc(t.pvalueInfo[ri])}" tabindex="0"` : ''}>${esc(v.trim())}</td>`; }).join('')}</tr>`).join('')}</tbody>`;
   $('t1notes').innerHTML = t.notes.map(x => `<li>${esc(x)}</li>`).join('');
 }
-const t1Matrix = () => { const t = buildTable1(); return [t.header.map(safe), ...t.rows.map(r => [safe(r[0]), ...r.slice(1)]), [''], ...t.notes.map(x => [x])]; };
+const localeTable1 = () => {
+  const t = buildTable1(), tx = x => window.AppI18n?.text(x) || x;
+  const rows = t.rows.map((r, ri) => {
+    let first = r[0];
+    if (t.rawRowIndices.has(ri)) { /* category values stay unchanged */ }
+    else if (first.trim() === 'Missing' || first.trim() === 'Non-missing n') first = first.startsWith('  ') ? `  ${tx(first.trim())}` : tx(first);
+    else first = tx(first);
+    return [first, ...r.slice(1)];
+  });
+    return { header: t.header.map(h => ['Characteristic', 'Exploratory p-value'].includes(h) ? tx(h) : h), rows, notes: t.notes.map(tx), pvalueInfo: t.pvalueInfo };
+};
+const t1Matrix = () => { const t = localeTable1(); return [t.header.map(safe), ...t.rows.map(r => [safe(r[0]), ...r.slice(1)]), [''], ...t.notes.map(x => [x])]; };
 
 function initExtra() {
   document.addEventListener('click', e => {
@@ -991,11 +1022,13 @@ function initExtra() {
   $('figpdf').addEventListener('click', figPdf);
   $('dlDocx').addEventListener('click', () => exportDocx(summaryDocx, baseName() + '.docx'));
   $('t1docx').addEventListener('click', () => exportDocx(table1Docx, baseName().replace('_descriptive_stats', '_table1') + '.docx'));
+  /* Variable types controls are temporarily disabled; preserve handler for future use.
   $('types').addEventListener('change', async e => {
     const s = e.target.closest('select[data-tname]'), cb = e.target.closest('input[data-t1]');
     if (s) { if (s.value === 'auto') delete state.types[s.dataset.tname]; else state.types[s.dataset.tname] = s.value; await reanalyze(); }
     else if (cb) { if (cb.checked) state.t1.skip.delete(cb.dataset.t1); else state.t1.skip.add(cb.dataset.t1); renderT1(); }
   });
+  */
   $('t1group').addEventListener('change', e => { state.t1.group = e.target.value; renderT1(); });
   $('t1testMode').addEventListener('change', e => { state.t1.testMode = e.target.value === 'nonparametric' ? 'nonparametric' : 'parametric'; renderT1(); });
   $('t1variables').addEventListener('change', e => {
@@ -1013,7 +1046,9 @@ function initExtra() {
   $('t1overall').addEventListener('change', e => { state.t1.overall = e.target.checked; renderT1(); });
   $('t1showPValues').addEventListener('change', e => { state.t1.showPValues = e.target.checked; renderT1(); });
   if ($('catsearch')) $('catsearch').addEventListener('input', renderCategorical);
+  /* Table 1 Copy action temporarily disabled; retained for future use.
   $('t1copy').addEventListener('click', () => copyText(t1Matrix().map(r => r.map(tsvCell).join('\t')).join('\n'), 'Table 1 copied (tab-separated).'));
+  */
   $('t1csv').addEventListener('click', () => download(t1Matrix().map(r => r.map(csvCell).join(',')).join('\r\n'), baseName().replace('_descriptive_stats', '_table1') + '.csv', 'text/csv'));
   $('stats').querySelector('tbody').addEventListener('change', renderT1);
   document.querySelectorAll('[data-setall]').forEach(b => b.addEventListener('click', renderT1));
@@ -1030,7 +1065,7 @@ const FIGS = {
   scatter: { name: 'Scatter plot', info: 'Two numeric variables', needs: 'Two numeric + optional categorical', icon: '<circle cx="6" cy="17" r="1.5"/><circle cx="11" cy="11" r="1.5"/><circle cx="17" cy="14" r="1.5"/><circle cx="19" cy="6" r="1.5"/>' },
   miss: { name: 'Missingness', info: 'Missing values per variable', needs: 'All variables', icon: '<path d="M4 5h16M4 10h10M4 15h6M4 20h13"/>' }
 };
-const tl = v => String(+Number(v).toPrecision(6));
+const tl = v => new Intl.NumberFormat(window.AppI18n?.locale || 'en-US', { maximumSignificantDigits: 6, useGrouping: false }).format(Number(v));
 const cut = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
 const lin = (d0, d1, r0, r1) => v => r0 + (v - d0) / ((d1 - d0) || 1) * (r1 - r0);
 const numVar = n => state.results.find(r => r.name === n), catVar = n => state.categorical.find(r => r.name === n);
@@ -1047,7 +1082,7 @@ const xAx = (d, sx, tk) => tk.map(v => `<line x1="${sx(v)}" x2="${sx(v)}" y1="${
 function frame(d, inner, title, xl, yl, extra = '') {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${d.W} ${d.H}" width="${d.W}" height="${d.H}" font-family="system-ui, Arial, sans-serif" role="img" aria-label="${esc(title)}"><title>${esc(title)}</title><rect width="${d.W}" height="${d.H}" fill="#fff"/><text x="${d.W / 2}" y="22" text-anchor="middle" font-size="15" font-weight="600" fill="#1d2430">${esc(title)}</text>${extra}${inner}${T((d.l + d.W - d.r) / 2, d.H - 10, xl)}${yl ? `<text transform="translate(16 ${(d.t + d.H - d.b) / 2}) rotate(-90)" text-anchor="middle" font-size="12" fill="#1d2430">${esc(yl)}</text>` : ''}</svg>`;
 }
-const need = kind => ({ msg: (kind === 'cat' ? state.categorical : state.results).length ? 'Choose a variable.' : (kind === 'cat' ? 'No categorical variables were detected. Try a histogram, box plot or the missingness plot, or change a variable type under Tables → Variable types.' : 'No numeric variables were detected. Try a bar chart or the missingness plot, or change a variable type under Tables → Variable types.') });
+const need = kind => ({ msg: (kind === 'cat' ? state.categorical : state.results).length ? 'Choose a variable.' : (kind === 'cat' ? 'No categorical variables were detected. Try a histogram, box plot or the missingness plot.' : 'No numeric variables were detected. Try a bar chart or the missingness plot.') });
 const done = (svg, d, desc) => ({ svg, w: d.W, h: d.H, desc });
 
 function figHist(f) {
@@ -1090,7 +1125,7 @@ function figBar(f) {
   const c = catVar(f.c); if (!c) return need('cat');
   const lv = byFreq(c), shown = lv.slice(0, 15), hid = lv.length - shown.length, pct = f.mode === 'pct';
   const d = { W: 640, H: 104 + 26 * shown.length, l: 140, r: 90, t: 40, b: 56 }, vals = shown.map(([, n]) => pct ? 100 * n / c.nonMissing : n), mx = Math.max(...vals), sx = lin(0, mx, d.l, d.W - d.r);
-  const bars = shown.map(([k, n], i) => { const y = d.t + 8 + i * 26, p = 100 * n / c.nonMissing; return T(d.l - 6, y + 14, cut(k, 20), 'end', '#1d2430', 11) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(vals[i]) - d.l)}" height="20" fill="${PAL[0]}"/>` + T(sx(vals[i]) + 4, y + 14, `${n} (${p.toFixed(1)}%)`, 'start', '#1d2430', 11); }).join('');
+  const bars = shown.map(([k, n], i) => { const y = d.t + 8 + i * 26, p = 100 * n / c.nonMissing; return T(d.l - 6, y + 14, cut(k, 20), 'end', '#1d2430', 11) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(vals[i]) - d.l)}" height="20" fill="${PAL[0]}"/>` + T(sx(vals[i]) + 4, y + 14, `${n.toLocaleString(window.AppI18n?.locale || 'en-US')} (${localFixed(p, 1)}%)`, 'start', '#1d2430', 11); }).join('');
   return done(frame(d, xAx(d, sx, niceTicks(0, mx)) + bars, cut(c.name, 60), pct ? `Percent of non-missing (n = ${c.nonMissing})` : 'Count', ''), d,
     `Bar chart of ${c.name}: ${c.nonMissing} non-missing observations; ${c.missing} missing excluded from percentages.${hid ? ` Showing the 15 most frequent of ${lv.length} levels; ${hid} not shown.` : ''}`);
 }
@@ -1099,7 +1134,7 @@ function figMiss() {
   const n = state.rows.length;
   const items = state.cols.filter(c => (c.type !== 'excluded' || c.empty) && c.name !== state.patientId).map(c => [c.name, c.missing]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const d = { W: 640, H: 104 + 22 * items.length, l: 150, r: 90, t: 40, b: 56 }, sx = lin(0, 100, d.l, d.W - d.r);
-  const bars = items.map(([h, m], i) => { const y = d.t + 8 + i * 22, p = 100 * m / n; return T(d.l - 6, y + 13, cut(h, 22), 'end', '#1d2430', 11) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(p) - d.l)}" height="16" fill="${PAL[0]}"/>` + T(sx(p) + 4, y + 12, `${m} (${p.toFixed(1)}%)`, 'start', '#1d2430', 11); }).join('');
+  const bars = items.map(([h, m], i) => { const y = d.t + 8 + i * 22, p = 100 * m / n; return T(d.l - 6, y + 13, cut(h, 22), 'end', '#1d2430', 11) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(p) - d.l)}" height="16" fill="${PAL[0]}"/>` + T(sx(p) + 4, y + 12, `${m.toLocaleString(window.AppI18n?.locale || 'en-US')} (${localFixed(p, 1)}%)`, 'start', '#1d2430', 11); }).join('');
   return done(frame(d, xAx(d, sx, [0, 25, 50, 75, 100]) + bars, 'Missing values by variable', `Percent of ${n} rows missing`, ''), d,
     `Missingness for ${items.length} analyzed variables (${n} rows), sorted by percent missing. Numeric columns also count non-numeric entries as missing. Missing = blank, NA, N/A, NaN, null, missing, "." or "-".`);
 }
@@ -1128,7 +1163,7 @@ function figRefresh() {
   if (!cat.includes(f.c)) f.c = cat[0] || '';
   if (f.g && !cat.includes(f.g)) f.g = '';
   $('figtypes').innerHTML = Object.entries(FIGS).map(([k, v]) => `<button type="button" class="figtype" data-fig="${k}" aria-pressed="${f.type === k}"><svg viewBox="0 0 24 24" aria-hidden="true">${v.icon}</svg><strong>${v.name}</strong><span>${v.info}</span><em>${v.needs}</em></button>`).join('');
-  const S = (id, label, list, val, none) => `<label for="fig${id}">${label}</label><select id="fig${id}" class="method" data-f="${id}">${none ? '<option value="">None</option>' : ''}${list.map(n => `<option value="${esc(n)}"${n === val ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
+  const S = (id, label, list, val, none) => `<label for="fig${id}">${label}</label><select id="fig${id}" class="method" data-f="${id}">${none ? '<option value="">None</option>' : ''}${list.map(n => `<option data-raw value="${esc(n)}"${n === val ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
   $('figctl').innerHTML = { hist: () => S('x', 'Variable', num, f.x) + `<label for="figbins">Bins</label><input id="figbins" data-f="bins" type="number" min="1" max="100" placeholder="Auto" value="${f.bins || ''}">`,
     box: () => S('x', 'Variable', num, f.x) + S('g', 'Group by', cat, f.g, true), bar: () => S('c', 'Variable', cat, f.c) + `<label for="figmode">Show</label><select id="figmode" class="method" data-f="mode"><option value="count"${f.mode === 'count' ? ' selected' : ''}>Counts</option><option value="pct"${f.mode === 'pct' ? ' selected' : ''}>Percent</option></select>`,
     miss: () => '', scatter: () => S('x', 'X', num, f.x) + S('y', 'Y', num, f.y) + S('g', 'Color by', cat, f.g, true) }[f.type]();
@@ -1136,10 +1171,12 @@ function figRefresh() {
 }
 function figDraw() {
   const f = state.fig, out = { hist: figHist, box: figBox, bar: figBar, miss: figMiss, scatter: figScatter }[f.type](f);
-  figCur = out.svg ? out : null;
-  $('figplot').innerHTML = out.svg || `<p class="note">${esc(out.msg)}</p>`;
+  const rawLabels = [...state.headers, ...state.categorical.flatMap(c => [...c.freq.keys()])];
+  const localizedSvg = out.svg ? (window.AppI18n?.markup(out.svg, rawLabels) || out.svg) : '';
+  figCur = out.svg ? { ...out, svg: localizedSvg } : null;
+  $('figplot').innerHTML = localizedSvg || `<p class="note">${esc(window.AppI18n?.text(out.msg) || out.msg)}</p>`;
   const p = $('figplot'); p.classList.remove('fade-soft'); void p.offsetWidth; p.classList.add('fade-soft');
-  $('figdesc').textContent = out.desc || '';
+  $('figdesc').textContent = window.AppI18n?.text(out.desc || '') || out.desc || '';
   $('figsvg').disabled = $('figpng').disabled = $('figpdf').disabled = !figCur;
 }
 const figName = ext => baseName().replace('_descriptive_stats', '_fig_' + state.fig.type) + '.' + ext;
@@ -1183,15 +1220,15 @@ function zipStore(files) {   // uncompressed ZIP container (valid for OOXML)
 }
 const xe = s => String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function docxBytes(title, header, rows, notes) {
-  const line = k => `<w:${k} w:val="single" w:sz="6" w:space="0" w:color="000000"/>`;
+  const line = k => `<w:${k} w:val="single" w:sz="4" w:space="0" w:color="AAB3BF"/>`;
   const run = (t, o = '') => `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>${o}</w:rPr><w:t xml:space="preserve">${xe(t)}</w:t></w:r>`;
   const cell = (t, i, head, last) => {
     const lead = i === 0 ? Math.floor((t.length - t.trimStart().length) / 2) : 0;
-    return `<w:tc><w:tcPr><w:tcBorders>${head ? line('top') : ''}${head || last ? line('bottom') : ''}</w:tcBorders></w:tcPr><w:p><w:pPr><w:spacing w:before="20" w:after="20"/>${lead ? `<w:ind w:left="${lead * 240}"/>` : ''}<w:jc w:val="${i ? 'center' : 'left'}"/></w:pPr>${run(t.trim(), `${head ? '<w:b/>' : ''}<w:sz w:val="20"/>`)}</w:p></w:tc>`;
+    return `<w:tc><w:tcPr><w:tcBorders>${line('top')}${line('left')}${line('bottom')}${line('right')}</w:tcBorders></w:tcPr><w:p><w:pPr><w:spacing w:before="20" w:after="20"/>${lead ? `<w:ind w:left="${lead * 240}"/>` : ''}<w:jc w:val="${i ? 'center' : 'left'}"/></w:pPr>${run(t.trim(), `${head ? '<w:b/>' : ''}<w:sz w:val="20"/>`)}</w:p></w:tc>`;
   };
   const tr = (r, head, last) => `<w:tr>${r.map((t, i) => cell(String(t), i, head, last)).join('')}</w:tr>`;
   const para = (t, o) => `<w:p><w:pPr><w:spacing w:before="0" w:after="120"/></w:pPr>${run(t, o)}</w:p>`;
-  const wide = header.length > 6, tbl = `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblLayout w:type="autofit"/></w:tblPr><w:tblGrid>${header.map((_, i) => `<w:gridCol w:w="${i ? 1500 : 3000}"/>`).join('')}</w:tblGrid>${tr(header, true, false)}${rows.map((r, i) => tr(r, false, i === rows.length - 1)).join('')}</w:tbl>`;
+  const wide = header.length > 6, tbl = `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblLayout w:type="autofit"/><w:tblBorders>${line('top')}${line('left')}${line('bottom')}${line('right')}${line('insideH')}${line('insideV')}</w:tblBorders></w:tblPr><w:tblGrid>${header.map((_, i) => `<w:gridCol w:w="${i ? 1500 : 3000}"/>`).join('')}</w:tblGrid>${tr(header, true, false)}${rows.map((r, i) => tr(r, false, i === rows.length - 1)).join('')}</w:tbl>`;
   const body = para(title, '<w:b/><w:sz w:val="22"/>') + tbl + (notes.length ? notes.map(n => para(n, '<w:i/><w:sz w:val="18"/>')).join('') : para('', '')) +
     `<w:sectPr><w:pgSz w:w="${wide ? 15840 : 12240}" w:h="${wide ? 12240 : 15840}"${wide ? ' w:orient="landscape"' : ''}/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>`;
   const X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>', enc = new TextEncoder();
@@ -1208,11 +1245,12 @@ function exportDocx(bytesFn, filename) {
 }
 function summaryDocx() {
   const v = getView();
-  return docxBytes('Descriptive statistics', ['Variable', 'N', 'Missing', 'Summary', 'Summary method'], v.map(r => [r.name, r.type === 'numeric' ? r.n : r.nonMissing, missingText(r), summaryValue(r), r.type === 'numeric' ? r.method : (({ auto: 'Auto: Counts (percentage)', counts: 'Counts', percentage: 'Percentage', counts_percentage: 'Counts (percentage)' })[state.t1.catChoices[r.name] || 'auto'])]),
-    [`Includes all ${v.length} detected numeric and categorical variables.`,
-     'Summary method as selected per variable (Auto is a heuristic, not a normality test). SD is the sample SD (n−1); quartiles use R type 7. Missing = blank, NA, N/A, NaN, null, missing, "." or "-".']);
+  const tx = x => window.AppI18n?.text(x) || x;
+  return docxBytes(tx('Descriptive statistics'), ['Variable', 'N', 'Missing', 'Summary', 'Summary method'].map(tx), v.map(r => [r.name, r.type === 'numeric' ? r.n.toLocaleString(window.AppI18n?.locale || 'en-US') : r.nonMissing.toLocaleString(window.AppI18n?.locale || 'en-US'), missingText(r), summaryValue(r), tx(r.type === 'numeric' ? (r.choice === 'auto' ? `Auto: ${r.autoMethod}` : r.method) : (({ auto: 'Auto: Counts (percentage)', counts: 'Counts', percentage: 'Percentage', counts_percentage: 'Counts (percentage)' })[state.t1.catChoices[r.name] || 'auto']))]),
+    [tx(`Includes all ${v.length} detected numeric and categorical variables.`),
+     tx('Summary method as selected per variable (Auto is a heuristic, not a normality test). SD is the sample SD (n−1); quartiles use R type 7. Missing = blank, NA, N/A, NaN, null, missing, "." or "-".')]);
 }
-function table1Docx() { const t = buildTable1(); return docxBytes('Table 1. Baseline characteristics', t.header, t.rows, t.notes); }
+function table1Docx() { const t = localeTable1(); return docxBytes(window.AppI18n?.text('Table 1 baseline characteristics') || 'Table 1 baseline characteristics', t.header, t.rows, t.notes); }
 
 function buildPdf(jpg, pxW, pxH, w, h) {   // one page, one embedded JPEG
   const m = 36, enc = s => new TextEncoder().encode(s), parts = [], off = []; let len = 0;
@@ -1251,8 +1289,7 @@ function figPdf() {
 
 // ---------- Reset & events ----------
 function reset() {
-  aboutReturnState = null;
-  $('aboutPage').hidden = true;
+  // About page reset logic temporarily disabled: aboutReturnState = null; $('aboutPage').hidden = true;
   document.querySelector('.page-header').hidden = false;
   $('landing').hidden = false;
   Object.assign(state, { fileName: '', patientId: '', headers: [], rows: [], results: [], categorical: [], excluded: [], cols: [], types: {}, choices: {}, t1: { group: '', overall: true, testMode: 'parametric', showPValues: false, skip: new Set(), selected: new Set(), catChoices: {} }, sortKey: null, sortDir: 1 });
@@ -1270,6 +1307,7 @@ function replayPageFade() {
   page.classList.add('fade-in');
 }
 
+/* About the Author navigation logic temporarily disabled; retained for future use.
 function openAbout() {
   if (aboutReturnState) return;
   const ids = ['.page-header', 'landing', 'status', 'error', 'results'];
@@ -1289,11 +1327,14 @@ function closeAbout() {
   $('aboutPage').hidden = true;
   $('aboutOpen').focus({ preventScroll: true });
 }
+*/
 
 function init() {
   $('copyrightYear').textContent = String(new Date().getFullYear());
+  /* About the Author button handlers temporarily disabled; retained for future use.
   $('aboutOpen').addEventListener('click', openAbout);
   $('aboutBack').addEventListener('click', closeAbout);
+  */
   $('sheetContinue').addEventListener('click', () => $('sheetPrompt').close('choose'));
   $('sheetCancel').addEventListener('click', () => $('sheetPrompt').close('cancel'));
   $('patientColumn').addEventListener('change', e => { $('patientYes').disabled = !e.target.value; });
@@ -1344,8 +1385,24 @@ function init() {
     const tr = e.target.closest('tr[data-name]'); if (tr) { e.preventDefault(); showDetail(tr.dataset.name); }
   });
   $('copyTable').addEventListener('click', () => copyText(tableRows().map(r => r.map(tsvCell).join('\t')).join('\n'), 'Table copied (tab-separated).'));
-  $('copyMs').addEventListener('click', () => copyText('Overall summary (not a stratified Table 1); missing values excluded\n' + getView().map(r => `${r.name}, ${r.type === 'numeric' ? r.method : categoricalMode(r)}: ${summaryValue(r)}`).join('\n'), 'Copied for manuscript.'));
+  /* Copy for manuscript action temporarily disabled; retained for future use.
+  $('copyMs').addEventListener('click', () => {
+    const tx = x => window.AppI18n?.text(x) || x;
+    const heading = tx('Overall summary (not a stratified Table 1); missing values excluded');
+    copyText(heading + '\n' + getView().map(r => {
+      const method = r.type === 'numeric' ? (r.choice === 'auto' ? `Auto: ${r.autoMethod}` : r.method) : ({ counts: 'Counts', percentage: 'Percentage', counts_percentage: 'Counts (percentage)' })[categoricalMode(r)];
+      return `${r.name}, ${tx(method)}: ${summaryValue(r)}`;
+    }).join('\n'), tx('Copied for manuscript.'));
+  });
+  */
   $('dlCsv').addEventListener('click', () => download(tableRows().map(r => r.map(csvCell).join(',')).join('\r\n'), baseName() + '.csv', 'text/csv'));
   $('dlTsv').addEventListener('click', () => download(tableRows().map(r => r.map(tsvCell).join('\t')).join('\r\n'), baseName() + '.tsv', 'text/tab-separated-values'));
 }
+window.onLocaleChange = () => {
+  if (!state.headers.length) return;
+  const detailName = $('detail').open ? $('dtitle').dataset.variable : '';
+  /* renderPreview(); renderTypes(); */
+  renderTable(); renderCategorical(); fillGroupSelect(); renderT1(); figRefresh();
+  if (detailName) { $('detail').close(); showDetail(detailName); }
+};
 init(); initExtra();
