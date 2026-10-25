@@ -118,7 +118,7 @@ td.ind{padding-left:28px}
 .path{display:flex;flex-direction:column;gap:6px;align-items:flex-start;text-align:left;padding:20px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);cursor:pointer;font-size:1rem}
 .path:hover{border-color:var(--accent);background:var(--accent-soft)}
 .path svg{width:32px;height:32px;stroke:var(--accent);fill:none;stroke-width:1.6}
-.path strong{font-size:1.15rem}.path span{color:var(--mute);font-size:.9rem}
+.path strong{font-size:1.15rem}.path span{color:var(--mute);font-size:1.2rem}
 .back{display:flex;gap:14px;align-items:center;margin-top:14px}.back h2{margin:0}
 /* About the Author page styles temporarily disabled; retained for future use.
 .about-page{max-width:900px;margin:28px auto 10px}#aboutPage[hidden]{display:none!important}.about-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:12px}.about-heading h2{margin:0}.author-card{display:flex;align-items:center;gap:24px;margin:28px 0;padding:22px;border:1px solid var(--line);border-radius:8px;background:#fff}.author-photo{display:block;width:180px;height:210px;object-fit:cover;object-position:center 28%;border-radius:6px}.author-card h3{margin:0;font-size:1.35rem}.author-card p{color:var(--mute);line-height:1.6}
@@ -154,6 +154,6 @@ dialog[open]::backdrop{animation:backdropIn .54s ease-in-out both}
 #home.compact .path{flex-direction:column;align-items:flex-start;gap:4px;padding:12px 15px;min-height:122px}
 #home.compact .path svg{width:24px;height:24px}
 #home.compact .path strong{font-size:1.3rem}
-#home.compact .path span{display:block;font-size:1rem;line-height:1.4}
-@media(max-width:600px){#home.compact .paths{width:100%;grid-template-columns:1fr 1fr;gap:8px}#home.compact .path{padding:12px}#home.compact .path svg{width:20px;height:20px}#home.compact .path strong{font-size:1.15rem}#home.compact .path span{display:block;font-size:.92rem;line-height:1.35}}
+#home.compact .path span{display:block;font-size:1.2rem;line-height:1.4}
+@media(max-width:600px){#home.compact .paths{width:100%;grid-template-columns:1fr 1fr;gap:8px}#home.compact .path{padding:12px}#home.compact .path svg{width:20px;height:20px}#home.compact .path strong{font-size:1.15rem}#home.compact .path span{display:block;font-size:1.05rem;line-height:1.35}}
 @media(prefers-reduced-motion:reduce){*,::backdrop{animation:none!important;transition:none!important}}
