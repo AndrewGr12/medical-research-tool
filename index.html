@@ -122,6 +122,7 @@
           <option value="parametric">Parametric (Welch)</option>
           <option value="nonparametric">Nonparametric</option>
         </select>
+        <label><input type="checkbox" id="t1showPValues"> Show exploratory p-values</label>
         <label><input type="checkbox" id="t1overall" checked> Overall column</label>
         <button type="button" class="btn" id="t1copy">Copy</button>
         <button type="button" class="btn" id="t1csv">Download CSV</button>
@@ -143,8 +144,8 @@
         <li><strong>Auto</strong> suggests Median (IQR) if n &lt; 10 or |skewness| ≥ 1; otherwise Mean (SD). Constant variables default to Mean (SD).</li>
         <li>This is a heuristic for exploratory description. It is not a formal normality test or a substitute for statistical judgment; verify assumptions before formal analysis or publication.</li>
         <li>SD is the sample SD (n−1). Quartiles use linear interpolation (R type 7 / Excel QUARTILE.INC). Skewness is the adjusted Fisher–Pearson coefficient (needs n ≥ 3).</li>
-        <li><strong>Grouped Table 1 tests:</strong> continuous variables use Welch's t-test / Welch's ANOVA in Parametric mode or Mann–Whitney U / Kruskal–Wallis in Nonparametric mode. Categorical variables use Pearson's chi-square when no expected count is below 1 and at least 80% are 5 or greater; sparse 2×2 tables use Fisher's exact test and other sparse tables use a conditional Fisher–Freeman–Halton exact test when enumerable. Otherwise, p-values are NA with an explanation. Tests use complete observations by variable and treat groups as independent. No normality test is performed; select Nonparametric when appropriate. Categorical percentages use non-missing observations within each group. Exports prefix text cells starting with = + - @ with an apostrophe to prevent spreadsheet formula execution.</li>
-        <li><strong>Missing</strong> = blank, NA, N/A, NaN, null, missing, “.” or “-”. Other non-numeric entries in a mostly numeric column are ignored in the summary and listed in a warning.</li>
+        <li><strong>Grouped Table 1:</strong> summaries are descriptive by default. Optional p-values are exploratory, unadjusted, and should not be used to assess baseline balance or clinical importance. They compare independent groups using complete observations; missing group labels are excluded. Welch tests compare means. Mann–Whitney U and Kruskal–Wallis compare rank distributions, not specifically medians. Categorical variables use one association test; sparse tables use exact tests when feasible. No multiplicity adjustment is applied. Review assumptions and study design before interpreting or publishing results.</li>
+        <li><strong>Missing</strong> = blank, NA, N/A, NaN, null, missing, “.” or “-”. In columns analyzed as numeric, non-numeric entries are also counted as missing and excluded from numeric summaries and comparisons. Per-variable non-missing N is shown in Table 1.</li>
       </ul>
     </details>
 

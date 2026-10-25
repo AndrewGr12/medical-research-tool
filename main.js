@@ -27,7 +27,7 @@ function loadSheetJS() {
   });
   return sheetJsPromise;
 }
-const state = { view: 'home', fig: null, patientId: '', types: {}, choices: {}, t1: { group: '', overall: true, testMode: 'parametric', skip: new Set(), selected: new Set(), catChoices: {} }, expandedCategoricals: new Set(), excluded: [], cols: [], baseWarnings: [], fileName: '', headers: [], rows: [], results: [], categorical: [], sortKey: null, sortDir: 1 };
+const state = { view: 'home', fig: null, patientId: '', types: {}, choices: {}, t1: { group: '', overall: true, testMode: 'parametric', showPValues: false, skip: new Set(), selected: new Set(), catChoices: {} }, expandedCategoricals: new Set(), excluded: [], cols: [], baseWarnings: [], fileName: '', headers: [], rows: [], results: [], categorical: [], sortKey: null, sortDir: 1 };
 let aboutReturnState = null;
 
 // ---------- CSV parsing (RFC 4180-style state machine) ----------
@@ -140,23 +140,32 @@ function analyzeColumn(name, idx, rows, warnings, forced) {
     raw[i] = MISSING.has(s.toLowerCase()) ? null : s;
     if (raw[i] === null) missing++;
   }
-  const nonMissing = total - missing, missingPct = (missing / total) * 100;
-  if (nonMissing === 0) { warnings.push(`“${name}” is empty and was skipped.`); return { type: 'excluded', name, empty: true }; }
+  const rawNonMissing = total - missing;
+  if (rawNonMissing === 0) { warnings.push(`“${name}” is empty and was skipped.`); return { type: 'excluded', name, empty: true, missing: total, missingPct: 100 }; }
   if (forced === 'exclude') return { type: 'excluded', name };
-  if (missingPct >= CONFIG.HIGH_MISSING * 100) warnings.push(`“${name}” has ${missingPct.toFixed(0)}% missing values.`);
+  const idLikeName = /(^|[^a-z])(id|identifier|mrn|medical\s*record|subject\s*id|participant\s*id|record\s*id|case\s*id)([^a-z]|$)/i.test(name);
+  if (idLikeName) {
+    const distinctRaw = new Set(raw.filter(value => value !== null)).size;
+    if (distinctRaw / rawNonMissing >= 0.85) warnings.push(`“${name}” looks like a possible identifier because most non-missing values are unique; review its variable type or exclude it if appropriate.`);
+  }
   const nums = raw.map(s => s === null ? null : parseNumber(s));   // null = missing or non-numeric
   const vals = nums.filter(v => v !== null);
   if (forced === 'numeric' && !vals.length) warnings.push(`“${name}” has no numeric values and was kept categorical.`);
-  const asNum = forced === 'numeric' ? vals.length > 0 : forced === 'categorical' ? false : vals.length / nonMissing >= CONFIG.NUMERIC_FRACTION;
+  const asNum = forced === 'numeric' ? vals.length > 0 : forced === 'categorical' ? false : vals.length / rawNonMissing >= CONFIG.NUMERIC_FRACTION;
   if (asNum) {
-    const nonNum = nonMissing - vals.length;
-    if (nonNum) warnings.push(`“${name}”: ${nonNum} non-numeric value(s) were ignored.`);
+    const nonNum = rawNonMissing - vals.length;
+    missing += nonNum;
+    const nonMissing = total - missing, missingPct = (missing / total) * 100;
+    if (missingPct >= CONFIG.HIGH_MISSING * 100) warnings.push(`“${name}” has ${missingPct.toFixed(0)}% missing values, including non-numeric entries.`);
+    if (nonNum) warnings.push(`“${name}”: ${nonNum} non-numeric value(s) were counted as missing.`);
     const s = computeStats(vals), auto = chooseMethod(s);
     if (s.sd === 0) warnings.push(`“${name}” is constant.`);
     const distinct = new Set(vals).size;
     if (!forced && vals.length > 1 && distinct <= 5 && vals.every(Number.isInteger)) warnings.push(`“${name}” has only ${distinct} distinct integer values; it may be categorical (see Variable types).`);
     return { type: 'numeric', name, nums, missing, missingPct, autoMethod: auto, choice: 'auto', method: auto, ...s };
   }
+  const nonMissing = rawNonMissing, missingPct = (missing / total) * 100;
+  if (missingPct >= CONFIG.HIGH_MISSING * 100) warnings.push(`“${name}” has ${missingPct.toFixed(0)}% missing values.`);
   const freq = new Map();   // exact (trimmed, case-sensitive) labels as strings
   raw.forEach(s => { if (s !== null) freq.set(s, (freq.get(s) || 0) + 1); });
   if (freq.size === nonMissing && nonMissing > 20) warnings.push(`“${name}” has all-distinct values (possible identifier).`);
@@ -237,7 +246,7 @@ async function loadText(text, name, options = {}) {
       // Patient ID exclusion warning box disabled by request:
       // warnings.push(`“${patientId}” was identified as a patient ID and excluded from analysis.`);
     }
-    state.t1 = { group: '', overall: true, testMode: 'parametric', skip: new Set(), selected: new Set(headers.filter(h => h !== patientId)), catChoices: {} };
+    state.t1 = { group: '', overall: true, testMode: 'parametric', showPValues: false, skip: new Set(), selected: new Set(headers.filter(h => h !== patientId)), catChoices: {} };
     state.expandedCategoricals = new Set();
     const a = await analyzeAll(headers, rows);
     Object.assign(state, { baseWarnings: warnings, excluded: a.excluded, cols: a.cols, fileName: name, headers, rows, results: a.results, categorical: a.categorical, sortKey: null, sortDir: 1 });
@@ -917,46 +926,51 @@ function buildTable1() {
     const miss = all.filter(i => g.labels[i] === null);
     if (miss.length) { sets.push({ label: 'Missing group', idx: miss }); notes.push(`${miss.length} row(s) have a missing “${g.name}” value; they appear under “Missing group” and are included in Overall.`); }
   }
-  const p = test => g ? pText(test) : '';
-  const rows = [['N', ...sets.map(s => s.idx.length.toLocaleString()), ...(g ? [''] : [])]];
+  const includeTests = Boolean(g && state.t1.showPValues);
+  const p = test => includeTests ? pText(test) : '';
+  const rows = [['N', ...sets.map(s => s.idx.length.toLocaleString()), ...(includeTests ? [''] : [])]];
   pvalueInfo.push('');
   let capped = 0;
   for (const c of state.cols) {
     if (c.type === 'excluded' || state.t1.skip.has(c.name) || !state.t1.selected.has(c.name) || c === g) continue;
     if (c.type === 'numeric') {
       const method = g ? (state.t1.testMode === 'nonparametric' ? 'Median (IQR)' : 'Mean (SD)') : c.method;
-      const d = decimalsFor(c), test = g ? selectComparisonTest('numeric', comparisonSets.map(s => s.idx.map(i => c.nums[i]).filter(x => x !== null)), state.t1.testMode) : null;
+      const d = decimalsFor(c), test = includeTests ? selectComparisonTest('numeric', comparisonSets.map(s => s.idx.map(i => c.nums[i]).filter(x => x !== null)), state.t1.testMode) : null;
       rows.push([`${c.name}, ${method === 'Mean (SD)' ? 'mean (SD)' : 'median (IQR)'}`, ...sets.map(s => {
         const v = s.idx.map(i => c.nums[i]).filter(x => x !== null);
-        return v.length ? fmtSummary(computeStats(v), method, d) : '—'; }), ...(g ? [p(test)] : [])]);
+        return v.length ? fmtSummary(computeStats(v), method, d) : '—'; }), ...(includeTests ? [p(test)] : [])]);
       pvalueInfo.push(test ? pTitle(test) : '');
+      rows.push(['  Non-missing n', ...sets.map(s => s.idx.filter(i => c.nums[i] !== null).length.toLocaleString()), ...(includeTests ? [''] : [])]); pvalueInfo.push('');
     } else {
       const mode = state.t1.catChoices[c.name] === 'counts' || state.t1.catChoices[c.name] === 'percentage' || state.t1.catChoices[c.name] === 'counts_percentage' ? state.t1.catChoices[c.name] : 'counts_percentage';
       const label = mode === 'counts' ? 'counts' : mode === 'percentage' ? 'percentage' : 'counts (percentage)';
-      const test = g ? selectComparisonTest('categorical', comparisonSets.map(s => s.idx.map(i => c.labels[i]).filter(x => x !== null)), state.t1.testMode) : null;
-      rows.push([`${c.name}, ${label}`, ...sets.map(() => ''), ...(g ? [p(test)] : [])]);
+      const test = includeTests ? selectComparisonTest('categorical', comparisonSets.map(s => s.idx.map(i => c.labels[i]).filter(x => x !== null)), state.t1.testMode) : null;
+      rows.push([`${c.name}, ${label}`, ...sets.map(() => ''), ...(includeTests ? [p(test)] : [])]);
       pvalueInfo.push(test ? pTitle(test) : '');
       const cnt = sets.map(s => { const m = new Map(); let den = 0; for (const i of s.idx) { const l = c.labels[i]; if (l !== null) { m.set(l, (m.get(l) || 0) + 1); den++; } } return { m, den }; });
       const lv = [...c.freq].sort((a, b) => b[1] - a[1] || nat(a[0], b[0]));
-      if (lv.length > CONFIG.T1_MAX_LEVELS) { capped++; rows.push([`  ${lv.length} levels (not listed)`, ...sets.map(() => ''), ...(g ? [''] : [])]); pvalueInfo.push(''); }
-      else lv.forEach(([k]) => { rows.push([`  ${k}`, ...cnt.map(x => { const n = x.m.get(k) || 0, pct = x.den ? (100 * n / x.den).toFixed(1) + '%' : '—'; return mode === 'counts' ? String(n) : mode === 'percentage' ? pct : x.den ? `${n} (${pct})` : '—'; }), ...(g ? [''] : [])]); pvalueInfo.push(''); });
+      if (lv.length > CONFIG.T1_MAX_LEVELS) { capped++; rows.push([`  ${lv.length} levels (not listed)`, ...sets.map(() => ''), ...(includeTests ? [''] : [])]); pvalueInfo.push(''); }
+      else lv.forEach(([k]) => { rows.push([`  ${k}`, ...cnt.map(x => { const n = x.m.get(k) || 0, pct = x.den ? (100 * n / x.den).toFixed(1) + '%' : '—'; return mode === 'counts' ? String(n) : mode === 'percentage' ? pct : x.den ? `${n} (${pct})` : '—'; }), ...(includeTests ? [''] : [])]); pvalueInfo.push(''); });
+      rows.push(['  Non-missing n', ...cnt.map(x => x.den.toLocaleString()), ...(includeTests ? [''] : [])]); pvalueInfo.push('');
     }
     const col = c.type === 'numeric' ? c.nums : c.labels;
     const ms = sets.map(s => s.idx.reduce((k, i) => k + (col[i] === null ? 1 : 0), 0));
-    if (ms.some(Boolean)) { rows.push(['  Missing', ...ms.map(String), ...(g ? [''] : [])]); pvalueInfo.push(''); }
+    if (ms.some(Boolean)) { rows.push(['  Missing', ...ms.map(String), ...(includeTests ? [''] : [])]); pvalueInfo.push(''); }
   }
-  if (g) notes.push(`P-values compare complete observations across ${comparisonSets.length} non-missing groups; missing group labels are excluded from tests. Continuous summaries and tests use ${state.t1.testMode === 'nonparametric' ? 'median (IQR) with Mann–Whitney U / Kruskal–Wallis' : 'mean (SD) with Welch’s t-test / Welch’s ANOVA'}. Categorical summaries are n (%) using non-missing outcomes within each group; one overall association test is shown per variable. Pearson chi-square requires no expected count below 1 and at least 80% of expected counts ≥5; sparse tables use exact tests when feasible. Hover or focus a p-value for the test and any limitation.`);
+  if (g) notes.push(includeTests ? `Exploratory, unadjusted p-values compare complete observations across ${comparisonSets.length} non-missing groups; missing group labels are excluded from tests. They are not a measure of baseline balance or clinical importance, and no multiplicity adjustment is applied. Continuous summaries use ${state.t1.testMode === 'nonparametric' ? 'median (IQR)' : 'mean (SD)'}; Welch tests compare means, while Mann–Whitney/Kruskal–Wallis test rank distributions and do not specifically test medians. Categorical variables use one overall association test. Pearson chi-square requires no expected count below 1 and at least 80% of expected counts ≥5; sparse tables use exact tests when feasible. Hover or focus a p-value for the test and any limitation.` : 'Grouped summaries are descriptive. P-values are hidden by default; enable “Show exploratory p-values” only when an unadjusted group comparison is appropriate. These tests do not measure baseline balance or clinical importance.');
   else notes.push('Continuous: mean (SD) or median (IQR) as selected under Summary (Auto is a heuristic, not a normality test). Categorical: counts, percentages of non-missing values, or both as selected under Summary settings (Auto defaults to counts and percentages). Statistics use available observations; missing values are never treated as zero. Non-numeric entries in numeric variables are counted as missing.');
   if (capped) notes.push(`${capped} categorical variable(s) with more than ${CONFIG.T1_MAX_LEVELS} levels are not listed in this table.`);
-  return { header: ['Characteristic', ...sets.map(s => s.label), ...(g ? ['P-value'] : [])], rows, notes, pvalueInfo };
+  return { header: ['Characteristic', ...sets.map(s => s.label), ...(includeTests ? ['Exploratory p-value'] : [])], rows, notes, pvalueInfo };
 }
 
 function renderT1() {
   $('t1overall').disabled = !state.t1.group;
+  $('t1showPValues').disabled = !state.t1.group;
+  $('t1showPValues').checked = state.t1.showPValues;
   $('t1variablesLabel').textContent = `Select variables (${state.t1.selected.size}/${state.headers.filter(name => name !== state.patientId).length})`;
   $('t1testMode').value = state.t1.testMode;
   const t = buildTable1();
-  const pIndex = t.header.length - 1, hasP = Boolean(state.t1.group);
+  const pIndex = t.header.length - 1, hasP = Boolean(state.t1.group && state.t1.showPValues);
   $('t1').innerHTML = `<thead><tr>${t.header.map((h, i) => `<th scope="col"${i ? ' class="num"' : ''}>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map((r, ri) => `<tr>${r.map((v, i) => `<td class="${i ? 'num' : r[0].startsWith('  ') ? 'ind' : ''}"${hasP && i === pIndex && t.pvalueInfo[ri] ? ` title="${esc(t.pvalueInfo[ri])}" tabindex="0"` : ''}>${esc(v.trim())}</td>`).join('')}</tr>`).join('')}</tbody>`;
   $('t1notes').innerHTML = t.notes.map(x => `<li>${esc(x)}</li>`).join('');
@@ -997,6 +1011,7 @@ function initExtra() {
   $('t1selectAll').addEventListener('click', () => { state.t1.selected = new Set(state.headers.filter(name => name !== state.patientId)); fillGroupSelect(); renderT1(); });
   $('t1selectNone').addEventListener('click', () => { state.t1.selected.clear(); fillGroupSelect(); renderT1(); });
   $('t1overall').addEventListener('change', e => { state.t1.overall = e.target.checked; renderT1(); });
+  $('t1showPValues').addEventListener('change', e => { state.t1.showPValues = e.target.checked; renderT1(); });
   if ($('catsearch')) $('catsearch').addEventListener('input', renderCategorical);
   $('t1copy').addEventListener('click', () => copyText(t1Matrix().map(r => r.map(tsvCell).join('\t')).join('\n'), 'Table 1 copied (tab-separated).'));
   $('t1csv').addEventListener('click', () => download(t1Matrix().map(r => r.map(csvCell).join(',')).join('\r\n'), baseName().replace('_descriptive_stats', '_table1') + '.csv', 'text/csv'));
@@ -1082,11 +1097,11 @@ function figBar(f) {
 
 function figMiss() {
   const n = state.rows.length;
-  const items = state.headers.map((h, c) => [h, c]).filter(([h]) => h !== state.patientId).map(([h, c]) => { let m = 0; for (const r of state.rows) if (MISSING.has((r[c] ?? '').trim().toLowerCase())) m++; return [h, m]; }).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const items = state.cols.filter(c => (c.type !== 'excluded' || c.empty) && c.name !== state.patientId).map(c => [c.name, c.missing]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const d = { W: 640, H: 104 + 22 * items.length, l: 150, r: 90, t: 40, b: 56 }, sx = lin(0, 100, d.l, d.W - d.r);
   const bars = items.map(([h, m], i) => { const y = d.t + 8 + i * 22, p = 100 * m / n; return T(d.l - 6, y + 13, cut(h, 22), 'end', '#1d2430', 11) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(p) - d.l)}" height="16" fill="${PAL[0]}"/>` + T(sx(p) + 4, y + 12, `${m} (${p.toFixed(1)}%)`, 'start', '#1d2430', 11); }).join('');
   return done(frame(d, xAx(d, sx, [0, 25, 50, 75, 100]) + bars, 'Missing values by variable', `Percent of ${n} rows missing`, ''), d,
-    `Missingness for ${items.length} variables (${n} rows), sorted by percent missing. Missing = blank, NA, N/A, NaN, null, missing, "." or "-".`);
+    `Missingness for ${items.length} analyzed variables (${n} rows), sorted by percent missing. Numeric columns also count non-numeric entries as missing. Missing = blank, NA, N/A, NaN, null, missing, "." or "-".`);
 }
 
 function figScatter(f) {
@@ -1240,7 +1255,7 @@ function reset() {
   $('aboutPage').hidden = true;
   document.querySelector('.page-header').hidden = false;
   $('landing').hidden = false;
-  Object.assign(state, { fileName: '', patientId: '', headers: [], rows: [], results: [], categorical: [], excluded: [], cols: [], types: {}, choices: {}, t1: { group: '', overall: true, testMode: 'parametric', skip: new Set(), selected: new Set(), catChoices: {} }, sortKey: null, sortDir: 1 });
+  Object.assign(state, { fileName: '', patientId: '', headers: [], rows: [], results: [], categorical: [], excluded: [], cols: [], types: {}, choices: {}, t1: { group: '', overall: true, testMode: 'parametric', showPValues: false, skip: new Set(), selected: new Set(), catChoices: {} }, sortKey: null, sortDir: 1 });
   state.fig = null; state.view = 'home'; $('warnings').hidden = true; $('warnings').innerHTML = '';
   state.expandedCategoricals = new Set();
   // Patient ID notice banner disabled by request: $('patientNotice').hidden = true; $('patientNotice').textContent = '';
