@@ -66,7 +66,7 @@ assert.match(css, /\.menupanel\{position:absolute;left:0;right:auto/, 'dropdown 
 assert.match(css, /#exportMenu>\.menupanel\{left:auto;right:0\}/, 'Export menu aligns its right edge with its trigger');
 assert.match(css, /prefers-reduced-motion:\s*reduce/, 'reduced-motion preference is respected');
 assert.match(css, /\.note\{font-size:\.875rem/, 'helper text uses a readable 14px minimum');
-assert.match(css, /\.figtype span\{color:var\(--mute\);font-size:\.85rem/, 'figure descriptions use readable text sizing');
+assert.match(css, /\.figtype span\{color:var\(--mute\);font-size:1\.28rem/, 'figure descriptions use the current readable card size');
 
 const docxStart = js.indexOf('const crcTable = (() =>');
 const docxEnd = js.indexOf('const DOCX_MIME', docxStart);
