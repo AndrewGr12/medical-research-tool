@@ -124,10 +124,10 @@ td.ind{padding-left:28px}
 .about-page{max-width:900px;margin:28px auto 10px}#aboutPage[hidden]{display:none!important}.about-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:12px}.about-heading h2{margin:0}.author-card{display:flex;align-items:center;gap:24px;margin:28px 0;padding:22px;border:1px solid var(--line);border-radius:8px;background:#fff}.author-photo{display:block;width:180px;height:210px;object-fit:cover;object-position:center 28%;border-radius:6px}.author-card h3{margin:0;font-size:1.35rem}.author-card p{color:var(--mute);line-height:1.6}
 */
 .figtypes{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0}
-.figtype{display:flex;flex-direction:column;gap:6px;align-items:flex-start;text-align:left;padding:14px;border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--ink);cursor:pointer;font-size:1.7rem}
+.figtype{display:flex;flex-direction:column;gap:4.5px;align-items:flex-start;text-align:left;padding:10.5px;border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--ink);cursor:pointer;font-size:1.28rem}
 .figtype:hover{border-color:var(--accent)}.figtype[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft)}
-.figtype svg{width:22px;height:22px;stroke:var(--accent);fill:none;stroke-width:1.8}
-.figtype span{color:var(--mute);font-size:1.7rem;line-height:1.35}.figtype em{font-style:normal;color:var(--accent);font-size:1.6rem}
+.figtype svg{width:16.5px;height:16.5px;stroke:var(--accent);fill:none;stroke-width:1.8}
+.figtype span{color:var(--mute);font-size:1.28rem;line-height:1.35}.figtype em{font-style:normal;color:var(--accent);font-size:1.2rem}
 .figctl{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:8px 0;font-size:.875rem}
 .figctl input[type=number]{width:80px;padding:3px 6px;border:1px solid #b5bdc8;border-radius:4px}
 .figwrap{border:1px solid var(--line);border-radius:4px;overflow:auto;max-height:75vh;background:#fff}
