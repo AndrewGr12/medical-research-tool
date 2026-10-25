@@ -27,7 +27,7 @@ function loadSheetJS() {
   });
   return sheetJsPromise;
 }
-const state = { view: 'home', fig: null, patientId: '', types: {}, choices: {}, t1: { group: '', overall: true, skip: new Set(), selected: new Set(), catChoices: {} }, expandedCategoricals: new Set(), excluded: [], cols: [], baseWarnings: [], fileName: '', headers: [], rows: [], results: [], categorical: [], sortKey: null, sortDir: 1 };
+const state = { view: 'home', fig: null, patientId: '', types: {}, choices: {}, t1: { group: '', overall: true, testMode: 'parametric', skip: new Set(), selected: new Set(), catChoices: {} }, expandedCategoricals: new Set(), excluded: [], cols: [], baseWarnings: [], fileName: '', headers: [], rows: [], results: [], categorical: [], sortKey: null, sortDir: 1 };
 let aboutReturnState = null;
 
 // ---------- CSV parsing (RFC 4180-style state machine) ----------
@@ -237,7 +237,7 @@ async function loadText(text, name, options = {}) {
       // Patient ID exclusion warning box disabled by request:
       // warnings.push(`“${patientId}” was identified as a patient ID and excluded from analysis.`);
     }
-    state.t1 = { group: '', overall: true, skip: new Set(), selected: new Set(headers.filter(h => h !== patientId)), catChoices: {} };
+    state.t1 = { group: '', overall: true, testMode: 'parametric', skip: new Set(), selected: new Set(headers.filter(h => h !== patientId)), catChoices: {} };
     state.expandedCategoricals = new Set();
     const a = await analyzeAll(headers, rows);
     Object.assign(state, { baseWarnings: warnings, excluded: a.excluded, cols: a.cols, fileName: name, headers, rows, results: a.results, categorical: a.categorical, sortKey: null, sortDir: 1 });
@@ -694,49 +694,271 @@ function renderCategoricalSettings() {
   $('catSettings').innerHTML = state.categorical.map(r => '<label class="cat-setting"><span>' + esc(r.name) + '</span><select class="method" data-cat-method="' + esc(r.name) + '" aria-label="Summary format for ' + esc(r.name) + '">' + options.map(([v, label]) => '<option value="' + v + '"' + ((state.t1.catChoices[r.name] || 'auto') === v ? ' selected' : '') + '>' + label + '</option>').join('') + '</select></label>').join('') || '<p class="note">No categorical variables were detected.</p>';
 }
 
+// ---------- Group comparison tests (kept independent of Table 1 rendering) ----------
+function logGamma(z) {
+  const p = [676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+  if (z < 0.5) return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * z)) - logGamma(1 - z);
+  z -= 1;
+  let x = 0.99999999999980993;
+  for (let i = 0; i < p.length; i++) x += p[i] / (z + i + 1);
+  const t = z + p.length - 0.5;
+  return 0.9189385332046727 + (z + 0.5) * Math.log(t) - t + Math.log(x);
+}
+function betaFraction(a, b, x) {
+  const max = 240, eps = 3e-14, tiny = 1e-300;
+  const qab = a + b, qap = a + 1, qam = a - 1;
+  let c = 1, d = 1 - qab * x / qap;
+  if (Math.abs(d) < tiny) d = tiny;
+  d = 1 / d;
+  let h = d;
+  for (let m = 1; m <= max; m++) {
+    const m2 = 2 * m;
+    let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+    d = 1 + aa * d; if (Math.abs(d) < tiny) d = tiny;
+    c = 1 + aa / c; if (Math.abs(c) < tiny) c = tiny;
+    d = 1 / d; h *= d * c;
+    aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+    d = 1 + aa * d; if (Math.abs(d) < tiny) d = tiny;
+    c = 1 + aa / c; if (Math.abs(c) < tiny) c = tiny;
+    d = 1 / d;
+    const delta = d * c; h *= delta;
+    if (Math.abs(delta - 1) < eps) break;
+  }
+  return h;
+}
+function regularizedBeta(x, a, b) {
+  if (x <= 0) return 0; if (x >= 1) return 1;
+  const bt = Math.exp(logGamma(a + b) - logGamma(a) - logGamma(b) + a * Math.log(x) + b * Math.log1p(-x));
+  return x < (a + 1) / (a + b + 2) ? bt * betaFraction(a, b, x) / a : 1 - bt * betaFraction(b, a, 1 - x) / b;
+}
+function regularizedGammaQ(a, x) {
+  if (x <= 0) return 1;
+  const gln = logGamma(a), eps = 3e-14, tiny = 1e-300;
+  if (x < a + 1) {
+    let ap = a, sum = 1 / a, del = sum;
+    for (let n = 1; n <= 1000; n++) { ap++; del *= x / ap; sum += del; if (Math.abs(del) < Math.abs(sum) * eps) break; }
+    const p = sum * Math.exp(-x + a * Math.log(x) - gln);
+    return Math.max(0, Math.min(1, 1 - p));
+  }
+  let b = x + 1 - a, c = 1 / tiny, d = 1 / Math.max(Math.abs(b), tiny) * Math.sign(b || 1), h = d;
+  for (let i = 1; i <= 1000; i++) {
+    const an = -i * (i - a); b += 2;
+    d = an * d + b; if (Math.abs(d) < tiny) d = tiny;
+    c = b + an / c; if (Math.abs(c) < tiny) c = tiny;
+    d = 1 / d; const delta = d * c; h *= delta;
+    if (Math.abs(delta - 1) < eps) break;
+  }
+  return Math.max(0, Math.min(1, Math.exp(-x + a * Math.log(x) - gln) * h));
+}
+function chiSquareTail(x, df) { return x < 0 || df <= 0 ? NaN : regularizedGammaQ(df / 2, x / 2); }
+function fTail(x, df1, df2) { return x < 0 || df1 <= 0 || df2 <= 0 ? NaN : regularizedBeta(df2 / (df2 + df1 * x), df2 / 2, df1 / 2); }
+function finiteTest(p, method, reason = '') {
+  return { p: Number.isFinite(p) && p >= 0 && p <= 1 ? p : null, method, reason: Number.isFinite(p) && p >= 0 && p <= 1 ? '' : (reason || 'The test returned a non-finite or out-of-range result.') };
+}
+function pText(result) { return result.p === null ? 'NA' : result.p < 0.001 ? '<0.001' : result.p.toFixed(3); }
+function pTitle(result) { return result.p === null ? `${result.method}: ${result.reason}` : `${result.method}; complete observations only.`; }
+function meanVariance(x) {
+  const n = x.length, mean = x.reduce((a, b) => a + b, 0) / n;
+  return { n, mean, variance: n > 1 ? x.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1) : NaN };
+}
+function welchT(groups) {
+  const [a, b] = groups.map(meanVariance);
+  if (a.n < 2 || b.n < 2) return finiteTest(NaN, "Welch's t-test", 'At least two non-missing observations are required in each group.');
+  const va = a.variance / a.n, vb = b.variance / b.n, se2 = va + vb;
+  if (se2 === 0) return finiteTest(a.mean === b.mean ? 1 : NaN, "Welch's t-test", 'Both groups have zero within-group variance; the test is undefined.');
+  const t = (a.mean - b.mean) / Math.sqrt(se2), df = se2 ** 2 / (va ** 2 / (a.n - 1) + vb ** 2 / (b.n - 1));
+  return finiteTest(regularizedBeta(df / (df + t * t), df / 2, 0.5), "Welch's t-test");
+}
+function welchAnova(groups) {
+  const s = groups.map(meanVariance), k = s.length;
+  if (k < 3) return welchT(groups);
+  if (s.some(x => x.n < 2)) return finiteTest(NaN, "Welch's ANOVA", 'At least two non-missing observations are required in every group.');
+  if (s.every(x => x.variance === 0)) return finiteTest(s.every(x => x.mean === s[0].mean) ? 1 : NaN, "Welch's ANOVA", 'All groups have zero within-group variance; the test is undefined.');
+  if (s.some(x => !(x.variance > 0))) return finiteTest(NaN, "Welch's ANOVA", 'A group has zero within-group variance; Welch’s ANOVA is undefined for this configuration.');
+  const w = s.map(x => x.n / x.variance), W = w.reduce((a, b) => a + b, 0), avg = w.reduce((a, wi, i) => a + wi * s[i].mean, 0) / W;
+  const numerator = w.reduce((sum, wi, i) => sum + wi * (s[i].mean - avg) ** 2, 0) / (k - 1);
+  const term = w.reduce((sum, wi, i) => sum + (1 - wi / W) ** 2 / (s[i].n - 1), 0);
+  if (!(term > 0)) return finiteTest(NaN, "Welch's ANOVA", 'The denominator degrees of freedom could not be estimated.');
+  const correction = 1 + (2 * (k - 2) / (k * k - 1)) * term, df2 = (k * k - 1) / (3 * term), f = numerator / correction;
+  return finiteTest(fTail(f, k - 1, df2), "Welch's ANOVA");
+}
+function ranked(values) {
+  const sorted = values.map((value, i) => ({ value, i })).sort((a, b) => a.value - b.value), ranks = new Array(values.length), ties = [];
+  for (let i = 0; i < sorted.length;) {
+    let j = i + 1; while (j < sorted.length && sorted[j].value === sorted[i].value) j++;
+    const rank = (i + 1 + j) / 2;
+    for (let k = i; k < j; k++) ranks[sorted[k].i] = rank;
+    if (j - i > 1) ties.push(j - i);
+    i = j;
+  }
+  return { ranks, ties };
+}
+function combinationsCapped(n, k, limit = 50000) {
+  k = Math.min(k, n - k); let x = 1;
+  for (let i = 1; i <= k; i++) { x = x * (n - k + i) / i; if (x > limit) return limit + 1; }
+  return Math.round(x);
+}
+function mannWhitney(groups) {
+  if (groups.length !== 2 || groups.some(x => x.length < 2)) return finiteTest(NaN, 'Mann–Whitney U', 'At least two non-missing observations are required in each of two groups.');
+  const all = [...groups[0], ...groups[1]], { ranks, ties } = ranked(all), n1 = groups[0].length, n2 = groups[1].length, N = n1 + n2;
+  const rankSum = ranks.slice(0, n1).reduce((a, b) => a + b, 0), u = rankSum - n1 * (n1 + 1) / 2, mean = n1 * n2 / 2;
+  const ways = combinationsCapped(N, n1);
+  if (ways <= 50000) {
+    let extreme = 0;
+    function enumerate(start, selected, sum) {
+      if (selected === n1) { const permU = sum - n1 * (n1 + 1) / 2; if (Math.abs(permU - mean) + 1e-12 >= Math.abs(u - mean)) extreme++; return; }
+      for (let i = start; i <= N - (n1 - selected); i++) enumerate(i + 1, selected + 1, sum + ranks[i]);
+    }
+    enumerate(0, 0, 0);
+    return finiteTest(extreme / ways, 'Mann–Whitney U (exact permutation)');
+  }
+  const tie = ties.reduce((sum, t) => sum + t ** 3 - t, 0), variance = n1 * n2 / 12 * (N + 1 - tie / (N * (N - 1)));
+  if (variance === 0) return finiteTest(1, 'Mann–Whitney U (tie-corrected asymptotic)');
+  const z = Math.max(0, Math.abs(u - mean) - 0.5) / Math.sqrt(variance);
+  return finiteTest(regularizedGammaQ(0.5, z * z / 2), 'Mann–Whitney U (tie-corrected asymptotic)');
+}
+function kruskalWallis(groups) {
+  if (groups.length < 2 || groups.some(x => !x.length)) return finiteTest(NaN, 'Kruskal–Wallis', 'At least one non-missing observation is required in every group.');
+  const all = groups.flat(), { ranks, ties } = ranked(all), N = all.length;
+  const correction = 1 - ties.reduce((a, t) => a + t ** 3 - t, 0) / (N ** 3 - N);
+  if (correction === 0) return finiteTest(1, 'Kruskal–Wallis (tie-corrected)');
+  const hFor = sums => Math.max(0, (12 * sums.reduce((v, rankSum, i) => v + rankSum * rankSum / groups[i].length, 0) / (N * (N + 1)) - 3 * (N + 1)) / correction);
+  const observedSums = []; let offset = 0;
+  for (const g of groups) { observedSums.push(ranks.slice(offset, offset + g.length).reduce((a, b) => a + b, 0)); offset += g.length; }
+  const observed = hFor(observedSums);
+  let ways = 1, remaining = N;
+  for (const g of groups) { ways *= combinationsCapped(remaining, g.length); remaining -= g.length; if (ways > 50000) break; }
+  if (ways <= 50000) {
+    const counts = groups.map(() => 0), sums = groups.map(() => 0); let extreme = 0;
+    function assign(pos) {
+      if (pos === N) { if (hFor(sums) + 1e-12 >= observed) extreme++; return; }
+      for (let i = 0; i < groups.length; i++) if (counts[i] < groups[i].length) { counts[i]++; sums[i] += ranks[pos]; assign(pos + 1); sums[i] -= ranks[pos]; counts[i]--; }
+    }
+    assign(0);
+    return finiteTest(extreme / ways, 'Kruskal–Wallis (exact permutation)');
+  }
+  return finiteTest(chiSquareTail(observed, groups.length - 1), 'Kruskal–Wallis (tie-corrected asymptotic)');
+}
+const logChoose = (n, k) => k < 0 || k > n ? -Infinity : logGamma(n + 1) - logGamma(k + 1) - logGamma(n - k + 1);
+function fisher2x2(table) {
+  const [r1, r2] = table, n1 = r1[0] + r1[1], n2 = r2[0] + r2[1], c1 = r1[0] + r2[0], N = n1 + n2, obs = r1[0];
+  const lo = Math.max(0, c1 - n2), hi = Math.min(n1, c1), logDen = logChoose(N, c1);
+  const lp = x => logChoose(n1, x) + logChoose(n2, c1 - x) - logDen, observed = lp(obs), probs = [];
+  for (let x = lo; x <= hi; x++) probs.push({ x, logp: lp(x) });
+  const max = Math.max(...probs.map(x => x.logp)), den = probs.reduce((s, x) => s + Math.exp(x.logp - max), 0);
+  const num = probs.filter(x => x.logp <= observed + 1e-10).reduce((s, x) => s + Math.exp(x.logp - max), 0);
+  return finiteTest(Math.min(1, num / den), "Fisher's exact test (two-sided probability ordering)");
+}
+function tablePearson(table) {
+  const rows = table.map(r => r.reduce((a, b) => a + b, 0)), cols = table[0].map((_, j) => table.reduce((s, r) => s + r[j], 0)), N = rows.reduce((a, b) => a + b, 0);
+  let x2 = 0, expected = [];
+  for (let i = 0; i < rows.length; i++) for (let j = 0; j < cols.length; j++) { const e = rows[i] * cols[j] / N; expected.push(e); x2 += (table[i][j] - e) ** 2 / e; }
+  return { x2, df: (rows.length - 1) * (cols.length - 1), expected, rowTotals: rows };
+}
+function fisherFreemanHalton(table, limit = 40000) {
+  const nr = table.length, nc = table[0].length, rowMargins = table.map(r => r.reduce((a, b) => a + b, 0));
+  const colRemain = table[0].map((_, j) => table.reduce((s, r) => s + r[j], 0));
+  const observedLogWeight = -table.flat().reduce((s, n) => s + logGamma(n + 1), 0), weights = [], current = Array.from({ length: nr }, () => Array(nc).fill(0));
+  let visited = 0, exceeded = false;
+  function nextRow(i) {
+    if (exceeded) return;
+    if (i === nr - 1) {
+      if (colRemain.reduce((a, b) => a + b, 0) !== rowMargins[i]) return;
+      current[i] = colRemain.slice(); visited++;
+      if (visited > limit) { exceeded = true; return; }
+      weights.push({ logw: -current.flat().reduce((s, n) => s + logGamma(n + 1), 0) });
+      return;
+    }
+    function allocate(j, left) {
+      if (exceeded) return;
+      if (j === nc - 1) {
+        if (left < 0 || left > colRemain[j]) return;
+        current[i][j] = left; colRemain[j] -= left; nextRow(i + 1); colRemain[j] += left; return;
+      }
+      const future = colRemain.slice(j + 1).reduce((a, b) => a + b, 0), min = Math.max(0, left - future), max = Math.min(left, colRemain[j]);
+      for (let x = min; x <= max; x++) { current[i][j] = x; colRemain[j] -= x; allocate(j + 1, left - x); colRemain[j] += x; if (exceeded) return; }
+    }
+    allocate(0, rowMargins[i]);
+  }
+  nextRow(0);
+  if (exceeded || !weights.length) return finiteTest(NaN, 'Fisher–Freeman–Halton exact test', `The conditional table space exceeds ${limit.toLocaleString()} tables, so a reliable exact p-value was not computed.`);
+  const max = Math.max(...weights.map(w => w.logw)), denominator = weights.reduce((s, w) => s + Math.exp(w.logw - max), 0);
+  const numerator = weights.filter(w => w.logw <= observedLogWeight + 1e-10).reduce((s, w) => s + Math.exp(w.logw - max), 0);
+  return finiteTest(Math.min(1, numerator / denominator), 'Fisher–Freeman–Halton exact test (conditional probability ordering)');
+}
+function categoricalAssociation(groups) {
+  const levels = [...new Set(groups.flat())].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+  const table = groups.map(group => { const counts = new Map(); group.forEach(x => counts.set(x, (counts.get(x) || 0) + 1)); return levels.map(x => counts.get(x) || 0); });
+  if (table.length < 2 || table.some(r => r.reduce((a, b) => a + b, 0) === 0)) return finiteTest(NaN, 'Categorical association test', 'At least one complete observation is required in every group.');
+  const activeCols = levels.map((_, j) => j).filter(j => table.some(r => r[j] > 0)), activeRows = table.filter(r => r.reduce((a, b) => a + b, 0) > 0);
+  const reduced = activeRows.map(r => activeCols.map(j => r[j]));
+  if (reduced[0].length < 2) return finiteTest(1, 'Categorical association test', 'Only one observed outcome category remains among complete observations.');
+  const stat = tablePearson(reduced), small = stat.expected.some(e => e < 1) || stat.expected.filter(e => e < 5).length > stat.expected.length * 0.2;
+  if (!small) return finiteTest(chiSquareTail(stat.x2, stat.df), "Pearson's chi-square test");
+  if (reduced.length === 2 && reduced[0].length === 2) return fisher2x2(reduced);
+  return fisherFreemanHalton(reduced);
+}
+function selectComparisonTest(type, groups, mode) {
+  if (type === 'categorical') return categoricalAssociation(groups);
+  if (groups.length < 2) return finiteTest(NaN, 'Group comparison', 'At least two non-missing groups are required.');
+  if (mode === 'nonparametric') return groups.length === 2 ? mannWhitney(groups) : kruskalWallis(groups);
+  return groups.length === 2 ? welchT(groups) : welchAnova(groups);
+}
+
 function buildTable1() {
   const all = [...Array(state.rows.length).keys()], g = state.categorical.find(c => c.name === state.t1.group);
   const nat = (a, b) => a.localeCompare(b, undefined, { numeric: true });
-  const sets = [], notes = [`N = number of rows${g ? `; columns are levels of “${g.name}”` : ''}. No significance tests are reported.`];
+  const sets = [], notes = [`N = number of rows${g ? `; columns are levels of “${g.name}”` : ''}.`], pvalueInfo = [];
   if (!g || state.t1.overall) sets.push({ label: 'Overall', idx: all });
+  let comparisonSets = [];
   if (g) {
-    [...g.freq.keys()].sort(nat).forEach(k => sets.push({ label: k, idx: all.filter(i => g.labels[i] === k) }));
+    comparisonSets = [...g.freq.keys()].sort(nat).map(k => ({ label: k, idx: all.filter(i => g.labels[i] === k) }));
+    comparisonSets.forEach(s => sets.push(s));
     const miss = all.filter(i => g.labels[i] === null);
     if (miss.length) { sets.push({ label: 'Missing group', idx: miss }); notes.push(`${miss.length} row(s) have a missing “${g.name}” value; they appear under “Missing group” and are included in Overall.`); }
   }
-  const rows = [['N', ...sets.map(s => s.idx.length.toLocaleString())]];
+  const p = test => g ? pText(test) : '';
+  const rows = [['N', ...sets.map(s => s.idx.length.toLocaleString()), ...(g ? [''] : [])]];
+  pvalueInfo.push('');
   let capped = 0;
   for (const c of state.cols) {
     if (c.type === 'excluded' || state.t1.skip.has(c.name) || !state.t1.selected.has(c.name) || c === g) continue;
     if (c.type === 'numeric') {
-      const d = decimalsFor(c);
-      rows.push([`${c.name}, ${c.method === 'Mean (SD)' ? 'mean (SD)' : 'median (IQR)'}`, ...sets.map(s => {
+      const method = g ? (state.t1.testMode === 'nonparametric' ? 'Median (IQR)' : 'Mean (SD)') : c.method;
+      const d = decimalsFor(c), test = g ? selectComparisonTest('numeric', comparisonSets.map(s => s.idx.map(i => c.nums[i]).filter(x => x !== null)), state.t1.testMode) : null;
+      rows.push([`${c.name}, ${method === 'Mean (SD)' ? 'mean (SD)' : 'median (IQR)'}`, ...sets.map(s => {
         const v = s.idx.map(i => c.nums[i]).filter(x => x !== null);
-        return v.length ? fmtSummary(computeStats(v), c.method, d) : '—'; })]);
+        return v.length ? fmtSummary(computeStats(v), method, d) : '—'; }), ...(g ? [p(test)] : [])]);
+      pvalueInfo.push(test ? pTitle(test) : '');
     } else {
       const mode = state.t1.catChoices[c.name] === 'counts' || state.t1.catChoices[c.name] === 'percentage' || state.t1.catChoices[c.name] === 'counts_percentage' ? state.t1.catChoices[c.name] : 'counts_percentage';
       const label = mode === 'counts' ? 'counts' : mode === 'percentage' ? 'percentage' : 'counts (percentage)';
-      rows.push([`${c.name}, ${label}`, ...sets.map(() => '')]);
+      const test = g ? selectComparisonTest('categorical', comparisonSets.map(s => s.idx.map(i => c.labels[i]).filter(x => x !== null)), state.t1.testMode) : null;
+      rows.push([`${c.name}, ${label}`, ...sets.map(() => ''), ...(g ? [p(test)] : [])]);
+      pvalueInfo.push(test ? pTitle(test) : '');
       const cnt = sets.map(s => { const m = new Map(); let den = 0; for (const i of s.idx) { const l = c.labels[i]; if (l !== null) { m.set(l, (m.get(l) || 0) + 1); den++; } } return { m, den }; });
       const lv = [...c.freq].sort((a, b) => b[1] - a[1] || nat(a[0], b[0]));
-      if (lv.length > CONFIG.T1_MAX_LEVELS) { capped++; rows.push([`  ${lv.length} levels (not listed)`, ...sets.map(() => '')]); }
-      else lv.forEach(([k]) => rows.push([`  ${k}`, ...cnt.map(x => { const n = x.m.get(k) || 0, pct = x.den ? (100 * n / x.den).toFixed(1) + '%' : '—'; return mode === 'counts' ? String(n) : mode === 'percentage' ? pct : x.den ? `${n} (${pct})` : '—'; })]));
+      if (lv.length > CONFIG.T1_MAX_LEVELS) { capped++; rows.push([`  ${lv.length} levels (not listed)`, ...sets.map(() => ''), ...(g ? [''] : [])]); pvalueInfo.push(''); }
+      else lv.forEach(([k]) => { rows.push([`  ${k}`, ...cnt.map(x => { const n = x.m.get(k) || 0, pct = x.den ? (100 * n / x.den).toFixed(1) + '%' : '—'; return mode === 'counts' ? String(n) : mode === 'percentage' ? pct : x.den ? `${n} (${pct})` : '—'; }), ...(g ? [''] : [])]); pvalueInfo.push(''); });
     }
     const col = c.type === 'numeric' ? c.nums : c.labels;
     const ms = sets.map(s => s.idx.reduce((k, i) => k + (col[i] === null ? 1 : 0), 0));
-    if (ms.some(Boolean)) rows.push(['  Missing', ...ms.map(String)]);
+    if (ms.some(Boolean)) { rows.push(['  Missing', ...ms.map(String), ...(g ? [''] : [])]); pvalueInfo.push(''); }
   }
-  notes.push('Continuous: mean (SD) or median (IQR) as selected under Summary (Auto is a heuristic, not a normality test). Categorical: counts, percentages of non-missing values, or both as selected under Summary settings (Auto defaults to counts and percentages). Statistics use available observations; missing values are never treated as zero. Non-numeric entries in numeric variables are counted as missing.');
-  if (capped) notes.push(`${capped} categorical variable(s) with more than ${CONFIG.T1_MAX_LEVELS} levels are not listed; see Categorical variables.`);
-  return { header: ['Characteristic', ...sets.map(s => s.label)], rows, notes };
+  if (g) notes.push(`P-values compare complete observations across ${comparisonSets.length} non-missing groups; missing group labels are excluded from tests. Continuous summaries and tests use ${state.t1.testMode === 'nonparametric' ? 'median (IQR) with Mann–Whitney U / Kruskal–Wallis' : 'mean (SD) with Welch’s t-test / Welch’s ANOVA'}. Categorical summaries are n (%) using non-missing outcomes within each group; one overall association test is shown per variable. Pearson chi-square requires no expected count below 1 and at least 80% of expected counts ≥5; sparse tables use exact tests when feasible. Hover or focus a p-value for the test and any limitation.`);
+  else notes.push('Continuous: mean (SD) or median (IQR) as selected under Summary (Auto is a heuristic, not a normality test). Categorical: counts, percentages of non-missing values, or both as selected under Summary settings (Auto defaults to counts and percentages). Statistics use available observations; missing values are never treated as zero. Non-numeric entries in numeric variables are counted as missing.');
+  if (capped) notes.push(`${capped} categorical variable(s) with more than ${CONFIG.T1_MAX_LEVELS} levels are not listed in this table.`);
+  return { header: ['Characteristic', ...sets.map(s => s.label), ...(g ? ['P-value'] : [])], rows, notes, pvalueInfo };
 }
 
 function renderT1() {
   $('t1overall').disabled = !state.t1.group;
   $('t1variablesLabel').textContent = `Select variables (${state.t1.selected.size}/${state.headers.filter(name => name !== state.patientId).length})`;
+  $('t1testMode').value = state.t1.testMode;
   const t = buildTable1();
+  const pIndex = t.header.length - 1, hasP = Boolean(state.t1.group);
   $('t1').innerHTML = `<thead><tr>${t.header.map((h, i) => `<th scope="col"${i ? ' class="num"' : ''}>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
-    t.rows.map(r => `<tr>${r.map((v, i) => `<td class="${i ? 'num' : r[0].startsWith('  ') ? 'ind' : ''}">${esc(v.trim())}</td>`).join('')}</tr>`).join('')}</tbody>`;
+    t.rows.map((r, ri) => `<tr>${r.map((v, i) => `<td class="${i ? 'num' : r[0].startsWith('  ') ? 'ind' : ''}"${hasP && i === pIndex && t.pvalueInfo[ri] ? ` title="${esc(t.pvalueInfo[ri])}" tabindex="0"` : ''}>${esc(v.trim())}</td>`).join('')}</tr>`).join('')}</tbody>`;
   $('t1notes').innerHTML = t.notes.map(x => `<li>${esc(x)}</li>`).join('');
 }
 const t1Matrix = () => { const t = buildTable1(); return [t.header.map(safe), ...t.rows.map(r => [safe(r[0]), ...r.slice(1)]), [''], ...t.notes.map(x => [x])]; };
@@ -761,6 +983,7 @@ function initExtra() {
     else if (cb) { if (cb.checked) state.t1.skip.delete(cb.dataset.t1); else state.t1.skip.add(cb.dataset.t1); renderT1(); }
   });
   $('t1group').addEventListener('change', e => { state.t1.group = e.target.value; renderT1(); });
+  $('t1testMode').addEventListener('change', e => { state.t1.testMode = e.target.value === 'nonparametric' ? 'nonparametric' : 'parametric'; renderT1(); });
   $('t1variables').addEventListener('change', e => {
     const input = e.target.closest('[data-t1-variable]'); if (!input) return;
     if (input.checked) state.t1.selected.add(input.dataset.t1Variable); else state.t1.selected.delete(input.dataset.t1Variable);
@@ -1017,7 +1240,7 @@ function reset() {
   $('aboutPage').hidden = true;
   document.querySelector('.page-header').hidden = false;
   $('landing').hidden = false;
-  Object.assign(state, { fileName: '', patientId: '', headers: [], rows: [], results: [], categorical: [], excluded: [], cols: [], types: {}, choices: {}, t1: { group: '', overall: true, skip: new Set(), selected: new Set(), catChoices: {} }, sortKey: null, sortDir: 1 });
+  Object.assign(state, { fileName: '', patientId: '', headers: [], rows: [], results: [], categorical: [], excluded: [], cols: [], types: {}, choices: {}, t1: { group: '', overall: true, testMode: 'parametric', skip: new Set(), selected: new Set(), catChoices: {} }, sortKey: null, sortDir: 1 });
   state.fig = null; state.view = 'home'; $('warnings').hidden = true; $('warnings').innerHTML = '';
   state.expandedCategoricals = new Set();
   // Patient ID notice banner disabled by request: $('patientNotice').hidden = true; $('patientNotice').textContent = '';
