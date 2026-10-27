@@ -1103,26 +1103,29 @@ function niceTicks(lo, hi, n = 5) {
 const T = (x, y, s, a = 'middle', fill = '#1d2430', sz = 12) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="${sz}" fill="${fill}">${esc(s)}</text>`;
 const yAx = (d, sy, tk) => tk.map(v => `<line x1="${d.l}" x2="${d.W - d.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="#e3e7ec"/>${T(d.l - 6, sy(v) + 4, tl(v), 'end', '#5b6573', figTextSize('tick'))}`).join('') + `<line x1="${d.l}" x2="${d.l}" y1="${d.t}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
 const xAx = (d, sx, tk) => tk.map(v => `<line x1="${sx(v)}" x2="${sx(v)}" y1="${d.H - d.b}" y2="${d.H - d.b + 5}" stroke="#5b6573"/>${T(sx(v), d.H - d.b + 18, tl(v), 'middle', '#5b6573', figTextSize('tick'))}`).join('') + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
-function frame(d, inner, title, xl, yl, extra = '') {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${d.W} ${d.H}" width="${d.W}" height="${d.H}" font-family="system-ui, Arial, sans-serif" role="img" aria-label="${esc(title)}"><title>${esc(title)}</title><rect width="${d.W}" height="${d.H}" fill="#fff"/><text x="${d.W / 2}" y="${Math.max(22, figTextSize('title') + 6)}" text-anchor="middle" font-size="${figTextSize('title')}" font-weight="600" fill="#1d2430">${esc(title)}</text>${inner}${extra}${T((d.l + d.W - d.r) / 2, d.H - 10, xl, 'middle', '#1d2430', figTextSize('axis'))}${yl ? `<text transform="translate(16 ${(d.t + d.H - d.b) / 2}) rotate(-90)" text-anchor="middle" font-size="${figTextSize('axis')}" fill="#1d2430">${esc(yl)}</text>` : ''}</svg>`;
+function frame(d, inner, title, xl, yl, legend = null) {
+  const outputW = d.W + (legend ? legend.width + 24 : 0);
+  d.outputW = outputW;
+  const legendSvg = legend ? `<g transform="translate(${d.W + 16} 34)">${legend.svg}</g>` : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${outputW} ${d.H}" width="${outputW}" height="${d.H}" font-family="system-ui, Arial, sans-serif" role="img" aria-label="${esc(title)}"><title>${esc(title)}</title><rect width="${outputW}" height="${d.H}" fill="#fff"/><text x="${d.W / 2}" y="${Math.max(22, figTextSize('title') + 6)}" text-anchor="middle" font-size="${figTextSize('title')}" font-weight="600" fill="#1d2430">${esc(title)}</text>${inner}${legendSvg}${T((d.l + d.W - d.r) / 2, d.H - 10, xl, 'middle', '#1d2430', figTextSize('axis'))}${yl ? `<text transform="translate(16 ${(d.t + d.H - d.b) / 2}) rotate(-90)" text-anchor="middle" font-size="${figTextSize('axis')}" fill="#1d2430">${esc(yl)}</text>` : ''}</svg>`;
 }
 const need = kind => ({ msg: (kind === 'cat' ? state.categorical : state.results).length ? 'Choose a variable.' : (kind === 'cat' ? 'No categorical variables were detected. Try a histogram, box plot or the missingness plot.' : 'No numeric variables were detected. Try a bar chart or the missingness plot.') });
-const done = (svg, d, desc, hasLegend = false) => ({ svg, w: d.W, h: d.H, desc, hasLegend });
+const done = (svg, d, desc, hasLegend = false) => ({ svg, w: d.outputW || d.W, h: d.H, desc, hasLegend });
 
-function buildFigureLegend(items, W, marker = 'circle') {
+function buildFigureLegend(items, marker = 'circle') {
   const size = figTextSize('legend'), rowHeight = size + 8, xPad = 8, yPad = 7;
   const labels = items.map(item => cut(String(item.label), Math.max(6, Math.floor(150 / (size * 0.62)))));
   const textWidth = Math.max(0, ...labels.map(label => label.length * size * 0.62));
   const width = Math.min(190, textWidth + 30), height = items.length * rowHeight + yPad * 2;
-  const x = W - width - 10, y = 34, rows = items.map((item, i) => {
-    const baseline = y + yPad + size + i * rowHeight;
+  const rows = items.map((item, i) => {
+    const baseline = yPad + size + i * rowHeight;
     const swatch = marker === 'box'
-      ? `<rect x="${x + xPad}" y="${baseline - 9}" width="10" height="10" rx="2" fill="${item.color}" fill-opacity=".5" stroke="${item.color}"/>`
-      : `<circle cx="${x + xPad + 5}" cy="${baseline - 4}" r="4" fill="${item.color}"/>`;
-    return swatch + T(x + xPad + 17, baseline, labels[i], 'start', '#1d2430', size);
+      ? `<rect x="${xPad}" y="${baseline - 9}" width="10" height="10" rx="2" fill="${item.color}" fill-opacity=".5" stroke="${item.color}"/>`
+      : `<circle cx="${xPad + 5}" cy="${baseline - 4}" r="4" fill="${item.color}"/>`;
+    return swatch + T(xPad + 17, baseline, labels[i], 'start', '#1d2430', size);
   }).join('');
-  const box = `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="5" fill="#fff" fill-opacity=".94" stroke="#d7dde5"/>`;
-  return { svg: box + rows };
+  const box = `<rect width="${width}" height="${height}" rx="5" fill="#fff" stroke="#d7dde5"/>`;
+  return { svg: box + rows, width };
 }
 
 function figHist(f) {
@@ -1148,7 +1151,7 @@ function figBox(f) {
   groups = groups.filter(x => x.v.length);
   if (!groups.length) return { msg: 'No valid observations for this selection.' };
   const all = groups.flatMap(x => x.v), lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo || 1) * 0.06;
-  const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 70 }, legend = g ? buildFigureLegend(groups.map((G, i) => ({ label: G.label, color: PAL[i % PAL.length] })), d.W, 'box') : null, sy = lin(lo - pad, hi + pad, d.H - d.b, d.t), bw = (d.W - d.l - d.r) / groups.length, bx = Math.min(60, bw * 0.5);
+  const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 70 }, legend = g ? buildFigureLegend(groups.map((G, i) => ({ label: G.label, color: PAL[i % PAL.length] })), 'box') : null, sy = lin(lo - pad, hi + pad, d.H - d.b, d.t), bw = (d.W - d.l - d.r) / groups.length, bx = Math.min(60, bw * 0.5);
   const body = groups.map((G, i) => {
     const s = computeStats(G.v), lf = s.q1 - 1.5 * s.iqr, hf = s.q3 + 1.5 * s.iqr, inside = G.v.filter(x => x >= lf && x <= hf), cx = d.l + (i + 0.5) * bw, col = PAL[g ? i % PAL.length : 0];
     const wl = Math.min(...inside), wh = Math.max(...inside);
@@ -1157,7 +1160,7 @@ function figBox(f) {
       + (g ? T(cx, d.H - d.b + 16, cut(G.label, 12), 'middle', '#1d2430', figTextSize('tick')) : '') + T(cx, d.H - d.b + (g ? 36 : 16), `n=${G.v.length}`, 'middle', '#5b6573', figTextSize('value'));
   }).join('');
   const ax = yAx(d, sy, niceTicks(lo - pad, hi + pad)) + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
-  return done(frame(d, ax + body, g ? `${cut(displayVariableName(r.name), 30)} by ${cut(displayVariableName(g.name), 25)}` : cut(displayVariableName(r.name), 60), g ? displayVariableName(g.name) : '', displayVariableName(r.name), legend?.svg || ''), d,
+  return done(frame(d, ax + body, g ? `${cut(displayVariableName(r.name), 30)} by ${cut(displayVariableName(g.name), 25)}` : cut(displayVariableName(r.name), 60), g ? displayVariableName(g.name) : '', displayVariableName(r.name), legend), d,
     `Box plot of ${displayVariableName(r.name)}${g ? ` by ${displayVariableName(g.name)}` : ''}: n = ${all.length} plotted. Box = Q1–Q3 (R type 7) with median line; whiskers reach the most extreme values within 1.5×IQR; circles beyond are outliers and are not removed. Excluded: ${r.nums.length - r.nums.filter(x => x !== null).length} missing/non-numeric${g ? `; ${excl} with missing group; ${hiddenObs} in ${hiddenLv} less frequent level(s) not shown (max 12 groups)` : ''}.`, Boolean(legend));
 }
 
@@ -1188,10 +1191,9 @@ function figScatter(f) {
   if (!pts.length) return { msg: 'No observations have valid values for both variables.' };
   const rng = (a, b) => a === b ? [a - 1, b + 1] : [a - (b - a) * 0.04, b + (b - a) * 0.04];
   const [x0, x1] = rng(Math.min(...pts.map(p => p[0])), Math.max(...pts.map(p => p[0]))), [y0, y1] = rng(Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[1])));
-  const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 56 }, legend = g ? buildFigureLegend(lv.map((label, i) => ({ label, color: PAL[i] })), d.W) : null, sx = lin(x0, x1, d.l, d.W - d.r), sy = lin(y0, y1, d.H - d.b, d.t);
-  const leg = legend?.svg || '';
+  const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 56 }, legend = g ? buildFigureLegend(lv.map((label, i) => ({ label, color: PAL[i] }))) : null, sx = lin(x0, x1, d.l, d.W - d.r), sy = lin(y0, y1, d.H - d.b, d.t);
   const dots = pts.map(p => `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="3" fill="${PAL[p[2]]}" fill-opacity=".65"/>`).join('');
-  return done(frame(d, yAx(d, sy, niceTicks(y0, y1)) + xAx(d, sx, niceTicks(x0, x1)) + dots, `${cut(displayVariableName(Y.name), 28)} vs ${cut(displayVariableName(X.name), 28)}`, displayVariableName(X.name), displayVariableName(Y.name), leg), d,
+  return done(frame(d, yAx(d, sy, niceTicks(y0, y1)) + xAx(d, sx, niceTicks(x0, x1)) + dots, `${cut(displayVariableName(Y.name), 28)} vs ${cut(displayVariableName(X.name), 28)}`, displayVariableName(X.name), displayVariableName(Y.name), legend), d,
     `Scatter plot: ${pts.length} of ${state.rows.length} observations shown (pairs with a missing or non-numeric X or Y excluded${g ? `; ${exclG} excluded for missing ${displayVariableName(g.name)}` : ''}). No trend line is fitted.${note}`, Boolean(legend));
 }
 
@@ -1217,8 +1219,8 @@ function figDraw() {
   figCur = out.svg ? { ...out, svg } : null;
   const legendControl = $('figFontLegend'), legendField = legendControl.closest('.fig-text-control'), legendEnabled = Boolean(figCur?.hasLegend);
   legendControl.disabled = !legendEnabled; legendControl.setAttribute('aria-disabled', String(!legendEnabled)); legendField.classList.toggle('is-disabled', !legendEnabled);
-  $('figplot').innerHTML = svg || `<p class="note">${esc(out.msg)}</p>`;
-  const p = $('figplot'); p.classList.remove('fade-soft'); void p.offsetWidth; p.classList.add('fade-soft');
+  const p = $('figplot'); p.classList.toggle('has-legend', legendEnabled); p.innerHTML = svg || `<p class="note">${esc(out.msg)}</p>`;
+  p.classList.remove('fade-soft'); void p.offsetWidth; p.classList.add('fade-soft');
   $('figdesc').textContent = out.desc || '';
   $('figsvg').disabled = $('figpng').disabled = $('figpdf').disabled = !figCur;
 }
