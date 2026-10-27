@@ -15,6 +15,7 @@ const CONFIG = {
 const MISSING = new Set(['', 'na', 'n/a', 'nan', 'null', 'missing', '.', '-']);
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const displayVariableName = name => window.AppI18n?.text(name) || name;
 let sheetJsPromise = null;
 function loadSheetJS() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
@@ -311,7 +312,15 @@ function renderAll(warnings) {
   $('fname').textContent = state.fileName;
   $('fname').setAttribute('data-raw', '');
   $('fstats').innerHTML = [['Rows', state.rows.length], ['Columns', state.headers.length], ['Numeric', state.results.length], ['Categorical', state.categorical.length], ['Excluded', state.excluded.length]]
-    .map(([k, v]) => `<div><dt>${k}</dt><dd>${v.toLocaleString(window.AppI18n?.locale || 'en-US')}</dd></div>`).join('');
+    .map(([k, v]) => {
+      const count = v.toLocaleString(window.AppI18n?.locale || 'en-US');
+      if (window.AppI18n?.language === 'fr') {
+        const singular = v === 1;
+        const labels = { Rows: singular ? 'ligne' : 'lignes', Columns: singular ? 'colonne' : 'colonnes', Numeric: `variable${singular ? '' : 's'} numérique${singular ? '' : 's'}`, Categorical: `variable${singular ? '' : 's'} catégorielle${singular ? '' : 's'}`, Excluded: `variable${singular ? '' : 's'} exclue${singular ? '' : 's'}` };
+        return `<div class="count-first"><dt>${esc(labels[k])}</dt><dd>${count}</dd></div>`;
+      }
+      return `<div><dt>${k}</dt><dd>${count}</dd></div>`;
+    }).join('');
   const w = $('warnings');
   w.hidden = !warnings.length;
   w.innerHTML = warnings.length ? `<strong>Notes</strong><ul>${warnings.slice(0, 30).map(x => `<li>${esc(x)}</li>`).join('')}${warnings.length > 30 ? `<li>…and ${warnings.length - 30} more.</li>` : ''}</ul>` : '';
@@ -598,8 +607,8 @@ function drawBoxPlot(r) {
 }
 
 // ---------- Export ----------
-const tableRows = () => [['Variable', 'N', 'Missing', 'Summary', 'Summary method'].map(x => window.AppI18n?.text(x) || x),
-  ...getView().map(r => [safe(r.name), r.type === 'numeric' ? r.n : r.nonMissing, missingText(r), safe(summaryValue(r)), window.AppI18n?.text(r.type === 'numeric' ? (r.choice === 'auto' ? `Auto: ${r.autoMethod}` : r.method) : (({ auto: 'Auto: Counts (percentage)', counts: 'Counts', percentage: 'Percentage', counts_percentage: 'Counts (percentage)' })[state.t1.catChoices[r.name] || 'auto'])) || (r.type === 'numeric' ? r.method : state.t1.catChoices[r.name] || 'auto')])];
+const tableRows = () => [['Variable', 'n', 'Missing data, n (%)', 'Value', 'Statistic'].map(x => window.AppI18n?.text(x) || x),
+  ...getView().map(r => [safe(displayVariableName(r.name)), r.type === 'numeric' ? r.n : r.nonMissing, missingText(r), safe(summaryValue(r)), window.AppI18n?.text(r.type === 'numeric' ? (r.choice === 'auto' ? `Auto: ${r.autoMethod}` : r.method) : (({ auto: 'Auto: Counts (percentage)', counts: 'Counts', percentage: 'Percentage', counts_percentage: 'Counts (percentage)' })[state.t1.catChoices[r.name] || 'auto'])) || (r.type === 'numeric' ? r.method : state.t1.catChoices[r.name] || 'auto')])];
 const csvCell = v => /[",\n\r]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
 
 async function copyText(text, okMsg) {
@@ -936,7 +945,8 @@ function selectComparisonTest(type, groups, mode) {
 function buildTable1() {
   const all = [...Array(state.rows.length).keys()], g = state.categorical.find(c => c.name === state.t1.group);
   const nat = (a, b) => a.localeCompare(b, undefined, { numeric: true });
-  const sets = [], notes = [`N = number of rows${g ? `; columns are levels of “${g.name}”` : ''}.`], pvalueInfo = [];
+  const french = window.AppI18n?.language === 'fr';
+  const sets = [], notes = [`N: total number of patients (rows in the file); n: number of values summarized${g ? `; columns are levels of “${displayVariableName(g.name)}”` : ''}.`], pvalueInfo = [];
   if (!g || state.t1.overall) sets.push({ label: 'Overall', idx: all });
   let comparisonSets = [];
   if (g) {
@@ -955,26 +965,29 @@ function buildTable1() {
     if (c.type === 'numeric') {
       const method = g ? (state.t1.testMode === 'nonparametric' ? 'Median (IQR)' : 'Mean (SD)') : c.method;
       const d = decimalsFor(c), test = includeTests ? selectComparisonTest('numeric', comparisonSets.map(s => s.idx.map(i => c.nums[i]).filter(x => x !== null)), state.t1.testMode) : null;
-      rows.push([`${c.name}, ${method === 'Mean (SD)' ? 'mean (SD)' : 'median (IQR)'}`, ...sets.map(s => {
+      rows.push([`${displayVariableName(c.name)}, ${method === 'Mean (SD)' ? 'mean (SD)' : 'median (IQR)'}`, ...sets.map(s => {
         const v = s.idx.map(i => c.nums[i]).filter(x => x !== null);
         return v.length ? fmtSummary(computeStats(v), method, d) : '—'; }), ...(includeTests ? [p(test)] : [])]);
       pvalueInfo.push(test ? pTitle(test) : '');
-      rows.push(['  Non-missing n', ...sets.map(s => s.idx.filter(i => c.nums[i] !== null).length.toLocaleString(window.AppI18n?.locale || 'en-US')), ...(includeTests ? [''] : [])]); pvalueInfo.push('');
+      if (!french) { rows.push(['  Non-missing n', ...sets.map(s => s.idx.filter(i => c.nums[i] !== null).length.toLocaleString(window.AppI18n?.locale || 'en-US')), ...(includeTests ? [''] : [])]); pvalueInfo.push(''); }
     } else {
       const mode = state.t1.catChoices[c.name] === 'counts' || state.t1.catChoices[c.name] === 'percentage' || state.t1.catChoices[c.name] === 'counts_percentage' ? state.t1.catChoices[c.name] : 'counts_percentage';
       const label = mode === 'counts' ? 'counts' : mode === 'percentage' ? 'percentage' : 'counts (percentage)';
       const test = includeTests ? selectComparisonTest('categorical', comparisonSets.map(s => s.idx.map(i => c.labels[i]).filter(x => x !== null)), state.t1.testMode) : null;
-      rows.push([`${c.name}, ${label}`, ...sets.map(() => ''), ...(includeTests ? [p(test)] : [])]);
+      rows.push([`${displayVariableName(c.name)}, ${label}`, ...sets.map(() => ''), ...(includeTests ? [p(test)] : [])]);
       pvalueInfo.push(test ? pTitle(test) : '');
       const cnt = sets.map(s => { const m = new Map(); let den = 0; for (const i of s.idx) { const l = c.labels[i]; if (l !== null) { m.set(l, (m.get(l) || 0) + 1); den++; } } return { m, den }; });
       const lv = [...c.freq].sort((a, b) => b[1] - a[1] || nat(a[0], b[0]));
       if (lv.length > CONFIG.T1_MAX_LEVELS) { capped++; rows.push([`  ${lv.length} levels (not listed)`, ...sets.map(() => ''), ...(includeTests ? [''] : [])]); pvalueInfo.push(''); }
       else lv.forEach(([k]) => { rows.push([`  ${k}`, ...cnt.map(x => { const n = x.m.get(k) || 0, pct = x.den ? localFixed(100 * n / x.den, 1) + '%' : '—'; return mode === 'counts' ? n.toLocaleString(window.AppI18n?.locale || 'en-US') : mode === 'percentage' ? pct : x.den ? `${n.toLocaleString(window.AppI18n?.locale || 'en-US')} (${pct})` : '—'; }), ...(includeTests ? [''] : [])]); rawRowIndices.add(rows.length - 1); pvalueInfo.push(''); });
-      rows.push(['  Non-missing n', ...cnt.map(x => x.den.toLocaleString(window.AppI18n?.locale || 'en-US')), ...(includeTests ? [''] : [])]); pvalueInfo.push('');
+      if (!french) { rows.push(['  Non-missing n', ...cnt.map(x => x.den.toLocaleString(window.AppI18n?.locale || 'en-US')), ...(includeTests ? [''] : [])]); pvalueInfo.push(''); }
     }
     const col = c.type === 'numeric' ? c.nums : c.labels;
     const ms = sets.map(s => s.idx.reduce((k, i) => k + (col[i] === null ? 1 : 0), 0));
-    if (ms.some(Boolean)) { rows.push(['  Missing', ...ms.map(String), ...(includeTests ? [''] : [])]); pvalueInfo.push(''); }
+    if (ms.some(Boolean)) {
+      const missingCells = french ? ms.map((n, i) => `${n.toLocaleString(window.AppI18n?.locale || 'fr-FR')} (${localFixed(sets[i].idx.length ? 100 * n / sets[i].idx.length : 0, 1)}%)`) : ms.map(String);
+      rows.push([french ? '  Missing data, n (%)' : '  Missing', ...missingCells, ...(includeTests ? [''] : [])]); pvalueInfo.push('');
+    }
   }
   if (g) notes.push(includeTests ? `Exploratory, unadjusted p-values compare complete observations across ${comparisonSets.length} non-missing groups; missing group labels are excluded from tests. They are not a measure of baseline balance or clinical importance, and no multiplicity adjustment is applied. Continuous summaries use ${state.t1.testMode === 'nonparametric' ? 'median (IQR)' : 'mean (SD)'}; Welch tests compare means, while Mann–Whitney/Kruskal–Wallis test rank distributions and do not specifically test medians. Categorical variables use one overall association test. Pearson chi-square requires no expected count below 1 and at least 80% of expected counts ≥5; sparse tables use exact tests when feasible. Hover or focus a p-value for the test and any limitation.` : 'Grouped summaries are descriptive. P-values are hidden by default; enable “Show exploratory p-values” only when an unadjusted group comparison is appropriate. These tests do not measure baseline balance or clinical importance.');
   else notes.push('Continuous: mean (SD) or median (IQR) as selected under Summary (Auto is a heuristic, not a normality test). Categorical: counts, percentages of non-missing values, or both as selected under Summary settings (Auto defaults to counts and percentages). Statistics use available observations; missing values are never treated as zero. Non-numeric entries in numeric variables are counted as missing.');
@@ -992,7 +1005,7 @@ function renderT1() {
   const groupLevels = new Set(state.categorical.find(c => c.name === state.t1.group)?.freq.keys() || []);
   const pIndex = t.header.length - 1, hasP = Boolean(state.t1.group && state.t1.showPValues);
   $('t1').innerHTML = `<thead><tr>${t.header.map((h, i) => `<th scope="col"${i ? ' class="num"' : ''}${groupLevels.has(h) ? ' data-raw' : ''}>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
-    t.rows.map((r, ri) => `<tr>${r.map((v, i) => { const rawLevel = i === 0 && r[0].startsWith('  ') && !['Missing', 'Non-missing n'].includes(r[0].trim()); return `<td class="${i ? 'num' : r[0].startsWith('  ') ? 'ind' : ''}"${rawLevel ? ' data-raw' : ''}${hasP && i === pIndex && t.pvalueInfo[ri] ? ` title="${esc(t.pvalueInfo[ri])}" tabindex="0"` : ''}>${esc(v.trim())}</td>`; }).join('')}</tr>`).join('')}</tbody>`;
+    t.rows.map((r, ri) => `<tr>${r.map((v, i) => { const rawLevel = i === 0 && r[0].startsWith('  ') && !['Missing', 'Non-missing n', 'Missing data, n (%)'].includes(r[0].trim()); return `<td class="${i ? 'num' : r[0].startsWith('  ') ? 'ind' : ''}"${rawLevel ? ' data-raw' : ''}${hasP && i === pIndex && t.pvalueInfo[ri] ? ` title="${esc(t.pvalueInfo[ri])}" tabindex="0"` : ''}>${esc(v.trim())}</td>`; }).join('')}</tr>`).join('')}</tbody>`;
   $('t1notes').innerHTML = t.notes.map(x => `<li>${esc(x)}</li>`).join('');
 }
 const localeTable1 = () => {
@@ -1000,11 +1013,18 @@ const localeTable1 = () => {
   const rows = t.rows.map((r, ri) => {
     let first = r[0];
     if (t.rawRowIndices.has(ri)) { /* category values stay unchanged */ }
-    else if (first.trim() === 'Missing' || first.trim() === 'Non-missing n') first = first.startsWith('  ') ? `  ${tx(first.trim())}` : tx(first);
+    else if (['Missing', 'Non-missing n', 'Missing data, n (%)'].includes(first.trim())) first = first.startsWith('  ') ? `  ${tx(first.trim())}` : tx(first);
     else first = tx(first);
     return [first, ...r.slice(1)];
   });
-    return { header: t.header.map(h => ['Characteristic', 'Exploratory p-value'].includes(h) ? tx(h) : h), rows, notes: t.notes.map(tx), pvalueInfo: t.pvalueInfo };
+  const notes = window.AppI18n?.language === 'fr'
+    ? ['N : nombre total de patients (lignes du fichier) ; n : nombre de valeurs concernées.',
+       'Variables continues : moyenne (ET) ou médiane (IIQ), selon la statistique choisie dans les statistiques descriptives. Le mode Auto repose sur une règle empirique et ne constitue pas un test de normalité.',
+       'Variables catégorielles : effectifs et/ou pourcentages calculés sur les valeurs renseignées (Auto : les deux).',
+       'Les statistiques portent sur les données disponibles ; les valeurs manquantes ne sont jamais remplacées par zéro. Toute valeur non numérique dans une variable numérique est traitée comme manquante.',
+       ...(state.t1.group && t.notes[1] ? [tx(t.notes[1])] : []), ...t.notes.slice(2).map(tx)]
+    : t.notes.map(tx);
+  return { header: t.header.map(h => ['Characteristic', 'Exploratory p-value', 'Overall'].includes(h) ? tx(h) : h), rows, notes, pvalueInfo: t.pvalueInfo };
 };
 const t1Matrix = () => { const t = localeTable1(); return [t.header.map(safe), ...t.rows.map(r => [safe(r[0]), ...r.slice(1)]), [''], ...t.notes.map(x => [x])]; };
 
@@ -1246,7 +1266,7 @@ function exportDocx(bytesFn, filename) {
 function summaryDocx() {
   const v = getView();
   const tx = x => window.AppI18n?.text(x) || x;
-  return docxBytes(tx('Descriptive statistics'), ['Variable', 'N', 'Missing', 'Summary', 'Summary method'].map(tx), v.map(r => [r.name, r.type === 'numeric' ? r.n.toLocaleString(window.AppI18n?.locale || 'en-US') : r.nonMissing.toLocaleString(window.AppI18n?.locale || 'en-US'), missingText(r), summaryValue(r), tx(r.type === 'numeric' ? (r.choice === 'auto' ? `Auto: ${r.autoMethod}` : r.method) : (({ auto: 'Auto: Counts (percentage)', counts: 'Counts', percentage: 'Percentage', counts_percentage: 'Counts (percentage)' })[state.t1.catChoices[r.name] || 'auto']))]),
+  return docxBytes(tx('Descriptive statistics'), ['Variable', 'n', 'Missing data, n (%)', 'Value', 'Statistic'].map(tx), v.map(r => [displayVariableName(r.name), r.type === 'numeric' ? r.n.toLocaleString(window.AppI18n?.locale || 'en-US') : r.nonMissing.toLocaleString(window.AppI18n?.locale || 'en-US'), missingText(r), summaryValue(r), tx(r.type === 'numeric' ? (r.choice === 'auto' ? `Auto: ${r.autoMethod}` : r.method) : (({ auto: 'Auto: Counts (percentage)', counts: 'Counts', percentage: 'Percentage', counts_percentage: 'Counts (percentage)' })[state.t1.catChoices[r.name] || 'auto']))]),
     [tx(`Includes all ${v.length} detected numeric and categorical variables.`),
      tx('Summary method as selected per variable (Auto is a heuristic, not a normality test). SD is the sample SD (n−1); quartiles use R type 7. Missing = blank, NA, N/A, NaN, null, missing, "." or "-".')]);
 }
