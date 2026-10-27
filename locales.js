@@ -46,16 +46,16 @@
     ['Select an appropriate worksheet.','Sélectionnez la feuille appropriée.','Seleccione la hoja adecuada.','Выберите подходящий лист.'], ['This file has no data rows.','Ce fichier ne contient aucune ligne de données.','Este archivo no contiene filas de datos.','В файле нет строк данных.'], ['This file has only a header row and no data.','Ce fichier ne contient que la ligne d’en-tête, sans données.','Este archivo solo contiene la fila de encabezados y no tiene datos.','В файле есть только строка заголовков, без данных.'],
     ['Copy failed. Use Export → Download CSV instead.','Échec de la copie. Utilisez Exporter → Télécharger CSV.','No se pudo copiar. Use Exportar → Descargar CSV.','Не удалось скопировать. Используйте Экспорт → Скачать CSV.'], ['Nothing to copy.','Rien à copier.','No hay nada que copiar.','Нечего копировать.'], ['Copy failed. Use Export → Download CSV instead.','Échec de la copie. Utilisez Exporter → Télécharger CSV.','No se pudo copiar. Use Exportar → Descargar CSV.','Не удалось скопировать. Используйте Экспорт → Скачать CSV.'], ['Word file downloaded.','Fichier Word téléchargé.','Archivo Word descargado.','Файл Word скачан.'], ['Word export failed. Use Copy or CSV instead.','Échec de l’export Word. Utilisez Copier ou CSV.','Falló la exportación a Word. Use Copiar o CSV.','Не удалось экспортировать Word. Используйте копирование или CSV.'], ['PNG export failed. Use SVG.','Échec de l’export PNG. Utilisez SVG.','Falló la exportación PNG. Use SVG.','Не удалось экспортировать PNG. Используйте SVG.'], ['PDF export failed. Use SVG.','Échec de l’export PDF. Utilisez SVG.','Falló la exportación PDF. Use SVG.','Не удалось экспортировать PDF. Используйте SVG.'], ['Table copied (tab-separated).','Tableau copié (séparé par des tabulations).','Tabla copiada (separada por tabulaciones).','Таблица скопирована (разделитель — табуляция).'], /* Temporarily disabled: ['Copied for manuscript.','Copié pour le manuscrit.','Copiado para el manuscrito.','Скопировано для рукописи.'] */ ['All variables set to automatic selection.','Toutes les variables sont réglées sur la sélection automatique.','Todas las variables se configuraron en selección automática.','Для всех переменных включён автоматический выбор.']
   ];
-  const languages = ['en', 'fr', 'es', 'ru'];
+  const languages = ['en', 'fr', 'es', 'ru', 'ar'];
   const dict = Object.fromEntries(languages.map(l => [l, new Map()]));
   const reverse = new Map();
-  for (const row of rows) for (let i = 0; i < languages.length; i++) { dict[languages[i]].set(row[0], row[i]); reverse.set(row[i], row[0]); }
-  const localeTag = { en: 'en-US', fr: 'fr-FR', es: 'es-ES', ru: 'ru-RU' };
+  for (const row of rows) for (let i = 0; i < languages.length; i++) { const value = row[i] ?? row[0]; dict[languages[i]].set(row[0], value); reverse.set(value, row[0]); }
+  const localeTag = { en: 'en-US', fr: 'fr-FR', es: 'es-ES', ru: 'ru-RU', ar: 'en-US' };
   let current = 'en', selected = false;
   const sourceNodes = new WeakMap(), sourceAttrs = new WeakMap();
   const preserve = el => el.closest('#preview,[data-raw],.language-options,[data-locale]');
   function dynamic(en, lang) {
-    if (lang === 'en') return en;
+    if (lang === 'en' || lang === 'ar') return en;
     const fixed = dict[lang].get(en); if (fixed !== undefined) return fixed;
     const lowerType = { auto: 'Auto', numeric: 'Numeric', categorical: 'Categorical', excluded: 'Excluded', exclude: 'Exclude' }[en];
     if (lowerType) { const translated = dict[lang].get(lowerType); if (translated) return lang === 'en' ? en : translated.toLowerCase(); }
@@ -169,7 +169,7 @@
     }
     const attrs = ['aria-label','aria-description','title','placeholder'];
     root.querySelectorAll?.('*').forEach(el => { if (preserve(el)) return; let saved = sourceAttrs.get(el); if (!saved) { saved = {}; sourceAttrs.set(el,saved); } for (const a of attrs) if (el.hasAttribute(a)) { if (!(a in saved)) saved[a] = reverse.get(el.getAttribute(a)) || el.getAttribute(a); const val = text(saved[a]); if (val !== el.getAttribute(a)) el.setAttribute(a,val); } });
-    document.documentElement.lang = current; document.title = text('Data Analysis Assistant');
+    document.documentElement.lang = current === 'ar' ? 'en' : current; document.title = text('Data Analysis Assistant');
     document.querySelectorAll('[data-locale]').forEach(b => { const active = selected && b.dataset.locale === current; b.setAttribute('aria-pressed', String(active)); b.classList.toggle('selected', active); });
   }
   function markup(svg, rawValues = []) {
