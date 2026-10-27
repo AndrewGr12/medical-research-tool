@@ -1037,7 +1037,7 @@ function initExtra() {
   });
   $('figctl').addEventListener('input', e => { const k = e.target.dataset.f; if (!k) return; state.fig[k] = k === 'bins' ? (Math.floor(+e.target.value) || 0) : e.target.value; figDraw(); });
   $('figreset').addEventListener('click', () => { state.fig = null; figRefresh(); });
-  $('figsvg').addEventListener('click', () => figCur && download(figCur.svg, figName('svg'), 'image/svg+xml'));
+  $('figsvg').addEventListener('click', () => { const svg = displayedFigureSvg(); if (figCur && svg) download(svg, figName('svg'), 'image/svg+xml'); });
   $('figpng').addEventListener('click', figPng);
   $('figpdf').addEventListener('click', figPdf);
   $('dlDocx').addEventListener('click', () => exportDocx(summaryDocx, baseName() + '.docx'));
@@ -1200,6 +1200,7 @@ function figDraw() {
   $('figsvg').disabled = $('figpng').disabled = $('figpdf').disabled = !figCur;
 }
 const figName = ext => baseName().replace('_descriptive_stats', '_fig_' + state.fig.type) + '.' + ext;
+const displayedFigureSvg = () => { const svg = $('figplot').querySelector('svg'); return svg ? new XMLSerializer().serializeToString(svg) : figCur?.svg || ''; };
 function fadeShow(el) { el.hidden = false; el.classList.remove('fade-out'); el.classList.remove('fade-in'); void el.offsetWidth; el.classList.add('fade-in'); }
 function fadeHide(el, done) {
   if (el.hidden) { if (done) done(); return; }
@@ -1288,7 +1289,7 @@ function buildPdf(jpg, pxW, pxH, w, h) {   // one page, one embedded JPEG
   const out = new Uint8Array(len); let p = 0; for (const b of parts) { out.set(b, p); p += b.length; } return out;
 }
 function figRaster(mime, cb) {   // renders the displayed SVG at 3x onto a white canvas
-  const cur = figCur, url = URL.createObjectURL(new Blob([cur.svg], { type: 'image/svg+xml' })), img = new Image(), s = 3;
+  const cur = figCur, svg = displayedFigureSvg() || cur.svg, url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })), img = new Image(), s = 3;
   img.onload = () => {
     const cv = document.createElement('canvas'); cv.width = cur.w * s; cv.height = cur.h * s;
     const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(img, 0, 0, cv.width, cv.height);
