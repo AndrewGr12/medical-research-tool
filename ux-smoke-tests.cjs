@@ -68,6 +68,88 @@ assert.match(css, /prefers-reduced-motion:\s*reduce/, 'reduced-motion preference
 assert.match(css, /\.note\{font-size:\.875rem/, 'helper text uses a readable 14px minimum');
 assert.match(css, /\.figtype span\{color:var\(--mute\);font-size:1\.28rem/, 'figure descriptions use the current readable card size');
 
+const blockBetween = (source, startMarker, endMarker) => {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start + startMarker.length);
+  assert.ok(start >= 0 && end > start, `source block ${startMarker} exists`);
+  return source.slice(start, end);
+};
+const outputBlocks = [
+  blockBetween(js, 'function buildSummaryRow(', '\nfunction summaryCell('),
+  blockBetween(js, 'function renderTable(', '\n// Make the scope'),
+  blockBetween(js, 'const tableRows =', '\nconst csvCell'),
+  blockBetween(js, 'function showDetail(', '\nfunction drawBoxPlot('),
+  blockBetween(js, 'function buildTable1()', '\nfunction renderT1('),
+  blockBetween(js, 'const t1Matrix =', '\nfunction initExtra('),
+  blockBetween(js, 'function summaryDocx()', '\nfunction table1Docx('),
+  blockBetween(js, 'function table1Docx()', '\nfunction buildPdf('),
+  blockBetween(js, 'const tl =', '\nfunction figRefresh('),
+  blockBetween(js, 'function figDraw()', '\nconst figName')
+];
+for (const [i, block] of outputBlocks.entries()) {
+  assert.doesNotMatch(block, /window\.AppI18n|\.locale\b|\.language\b/, `output builder ${i + 1} is independent of UI language`);
+}
+assert.match(js, /const OUT_LOCALE = 'en-US'/, 'output locale is fixed in one shared constant');
+assert.doesNotMatch(outputBlocks.join('\n'), /Intl\.NumberFormat\((?!OUT_LOCALE)|toLocaleString\((?!OUT_LOCALE)/, 'output number formatting uses OUT_LOCALE');
+const chromeCountBlock = blockBetween(js, 'function renderAll(', '\n/* Data preview renderer');
+assert.match(chromeCountBlock, /toLocaleString\(window\.AppI18n\?\.locale/, 'localized number formatting remains limited to UI chrome counters');
+assert.doesNotMatch(js.replace(chromeCountBlock, ''), /toLocaleString\(window\.AppI18n\?\.locale/, 'output number formatting does not depend on AppI18n locale');
+assert.doesNotMatch(js, /new Intl\.NumberFormat\(window\.AppI18n/, 'Intl output formatting does not read AppI18n');
+assert.match(js, /localeCompare\([^,]+, 'en', \{ numeric: true \}\)/, 'output sorting uses fixed English collation');
+
+const outputIds = ['stats', 't1', 't1notes', 'types', 'preview', 'figplot', 'figdesc', 'dbody'];
+for (const id of outputIds) assert.match(rawHtml, new RegExp(`id="${id}"[^>]*data-output|data-output[^>]*id="${id}"`), `#${id} is marked as output`);
+assert.match(rawHtml, /<caption[^>]*data-output/, 'output captions are marked');
+assert.match(rawHtml, /class="tablewrap" data-output[^>]*aria-label="Scrollable summary statistics table"/, 'output table aria label is protected');
+assert.match(locales, /acceptNode\(node\) \{ return preserve\(node\.parentElement\) \? NodeFilter\.FILTER_REJECT : NodeFilter\.FILTER_ACCEPT; \}/, 'translatePage skips output subtrees');
+assert.match(locales, /new MutationObserver\(\(\) => translatePage\(\)\)\.observe\(document\.body/, 'mutation observer uses the protected translatePage path');
+assert.match(locales, /if \(current === 'ar'\) el\.setAttribute\('dir', 'ltr'\)/, 'output containers stay left-to-right for Arabic');
+assert.match(locales, /const languages = \['en', 'fr', 'es', 'ru', 'ar'\]/, 'all five UI languages remain configured');
+assert.match(locales, /for \(const row of rows\) if \(!outputOnlyKeys\.has\(row\[0\]\)\) for \(let i = 0; i < languages\.length; i\+\+\)/, 'each retained UI dictionary row receives a value for every language');
+const dynamicBlock = blockBetween(locales, 'function dynamic(en, lang)', '\n  function text(');
+assert.doesNotMatch(dynamicBlock, /Missingness for|Scatter plot:|Fisher–Freeman–Halton exact test \(|Histogram of|Box plot of|Bar chart of/, 'output-only regex translations are removed');
+assert.match(locales, /for \(const key of outputOnlyKeys\) arabic\.delete\(key\)/, 'output-only dictionary entries cannot re-enter through Arabic translations');
+
+const runtimeSource = js.replace(/\ninit\(\); initExtra\(\);\s*$/, '\n');
+assert.notEqual(runtimeSource, js, 'runtime builders can be loaded without attaching browser event handlers');
+const outputContext = vm.createContext({ TextEncoder, window: { AppI18n: null }, document: {} });
+vm.runInContext(runtimeSource, outputContext, { filename: 'main.js' });
+const localeSnapshots = vm.runInContext(`(() => {
+  const parsed = parseCSV(sampleCSV());
+  state.headers = parsed.rows[0]; state.rows = parsed.rows.slice(1); state.fileName = 'sample_data.csv';
+  const warnings = [];
+  state.cols = state.headers.map((name, i) => analyzeColumn(name, i, state.rows, warnings, null));
+  state.results = state.cols.filter(c => c.type === 'numeric');
+  state.categorical = state.cols.filter(c => c.type === 'categorical');
+  state.excluded = state.cols.filter(c => c.type === 'excluded');
+  state.t1.group = state.categorical.find(c => c.name === 'Sex')?.name || '';
+  state.t1.selected = new Set([state.results[0].name, 'Diabetes', 'Treatment']);
+  state.t1.skip = new Set(); state.t1.overall = true; state.t1.showPValues = false;
+  state.sortKey = null; state.sortDir = 1; state.patientId = '';
+  const localeMap = { en: 'en-US', fr: 'fr-FR', es: 'es-ES', ru: 'ru-RU', ar: 'ar-EG' };
+  return ['en','fr','es','ru','ar'].map(language => {
+    window.AppI18n = { language, locale: localeMap[language], text: value => 'localized:' + value, markup: value => 'localized:' + value };
+    const table1 = buildTable1(), summary = tableRows(), matrix = t1Matrix();
+    const figures = [
+      figHist({ x: state.results[0].name, bins: 0 }),
+      figBox({ x: state.results[0].name, g: state.t1.group }),
+      figBar({ c: state.t1.group, mode: 'count' }), figMiss(),
+      figScatter({ x: state.results[0].name, y: state.results[1].name, g: state.t1.group })
+    ];
+    const csv = rows => rows.map(row => row.map(csvCell).join(',')).join('\\r\\n');
+    return JSON.stringify({ summary, table1, matrix, figures, summaryCsv: csv(summary), table1Csv: csv(matrix),
+      summaryTsv: summary.map(row => row.map(tsvCell).join('\\t')).join('\\r\\n'),
+      summaryDocx: Array.from(summaryDocx()), table1Docx: Array.from(table1Docx()) });
+  });
+})()`, outputContext);
+assert.equal(new Set(localeSnapshots).size, 1, 'table rows, Table 1 notes, all figure SVG/descriptions, and exports are byte-identical in all five languages');
+const localeContext = vm.createContext({ window: {}, document: { addEventListener() {} } });
+vm.runInContext(locales, localeContext, { filename: 'locales.js' });
+for (const [language, expected] of Object.entries({ en: 'Upload', fr: 'Importation', es: 'Carga de datos', ru: 'Загрузка данных', ar: 'رفع ملف' })) {
+  assert.equal(localeContext.window.AppI18n.text('Upload', language), expected, `${language} retains an Upload translation`);
+}
+assert.equal(localeContext.window.AppI18n.text('Missing data, n (%)', 'fr'), 'Missing data, n (%)', 'output dictionary rows are no longer translated');
+
 const docxStart = js.indexOf('const crcTable = (() =>');
 const docxEnd = js.indexOf('const DOCX_MIME', docxStart);
 assert.ok(docxStart >= 0 && docxEnd > docxStart, 'Word export builder is present');

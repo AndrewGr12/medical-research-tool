@@ -6,6 +6,12 @@ This folder is a separate static copy of the website. It can be opened by openin
 
 The existing site already provides an understandable start (language choice, sample data, and upload), file-reading and analysis feedback, patient-ID exclusion, a persistent Tables/Figures switcher, descriptive and grouped outputs, exports, and keyboard/reduced-motion support. This version keeps those workflows and the statistical calculations intact.
 
+## Language behavior
+
+The selected language applies to instructions and interface controls. Analysis output stays in English in the summary table, Table 1, detail dialog, figure labels and descriptions, and exports. Uploaded column names and category values are kept as provided. Output numbers and sorting use fixed English conventions; outputs stay left-to-right when the interface is Arabic.
+
+Output DOM subtrees carry `data-output`, which keeps both initial translation and later DOM mutations from changing their text or accessible labels. The summary and Table 1 export paths reuse their table builders, and figure exports reuse the SVG shown in the preview.
+
 The review found two practical improvements: blank or duplicate CSV/Excel column names were automatically renamed without telling users, and helper/chart descriptions were smaller than the main interface text. The app now displays a translated note when it normalizes headers, and helper/chart text has been enlarged for easier reading. It also retains the named keyboard-scroll regions and live warning announcements added in the previous optimized copy.
 
 ## External dependency
@@ -16,7 +22,8 @@ CSV files work without a network connection. Excel workbook support loads SheetJ
 
 - `index.html`, `style.css`, `main.js`, `locales.js`: application entry point and runtime.
 - `statistics-tests.cjs`: existing grouped-comparison statistical regression checks.
-- `ux-smoke-tests.cjs`: structural checks for the packaged copy, local resources, key journeys, and basic accessibility affordances.
+- `ux-smoke-tests.cjs`: structural checks plus language-invariance checks for table rows, notes, figures, and export text across en/fr/es/ru/ar.
+- `AUDIT.md`: pre-change localization audit, root-cause finding, and test record.
 
 Unused or unrelated project assets were not copied. The author page and its image are disabled in the source UI.
 

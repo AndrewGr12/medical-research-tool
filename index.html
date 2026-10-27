@@ -103,9 +103,9 @@
         <div id="catSettings" class="cat-settings" aria-label="Categorical variable summary settings"></div>
       </details>
 
-      <div class="tablewrap" role="region" tabindex="0" aria-label="Scrollable summary statistics table">
-        <table id="stats">
-          <caption class="sr">Summary statistics and counts for detected variables</caption>
+      <div class="tablewrap" data-output role="region" tabindex="0" aria-label="Scrollable summary statistics table">
+        <table id="stats" data-output>
+          <caption class="sr" data-output>Summary statistics and counts for detected variables</caption>
           <thead>
             <tr>
               <th scope="col">Variable</th>
@@ -145,15 +145,15 @@
         <button type="button" class="btn primary" id="t1csv">Download CSV</button>
         <button type="button" class="btn primary" id="t1docx">Download Word</button>
       </div>
-      <div class="tablewrap" role="region" tabindex="0" aria-label="Scrollable Table 1 baseline characteristics"><table id="t1"><caption class="sr">Table 1 baseline characteristics</caption></table></div>
-      <ul id="t1notes" class="note"></ul>
+      <div class="tablewrap" data-output role="region" tabindex="0" aria-label="Scrollable Table 1 baseline characteristics"><table id="t1" data-output><caption class="sr" data-output>Table 1 baseline characteristics</caption></table></div>
+      <ul id="t1notes" class="note" data-output></ul>
     </details>
 
     <!-- Variable types section temporarily disabled, retained for future use.
     <details class="section">
       <summary>Variable types</summary>
       <p class="note">Override automatic detection (e.g., 0/1 treatment codes or numeric IDs). Original values are never changed.</p>
-      <div class="tablewrap"><table id="types"></table></div>
+      <div class="tablewrap" data-output><table id="types" data-output></table></div>
     </details>
     -->
 
@@ -173,17 +173,17 @@
     <!-- Data preview section temporarily disabled, retained for future use.
     <details class="section">
       <summary>Data preview</summary>
-      <div class="tablewrap"><table id="preview"></table></div>
+      <div class="tablewrap" data-output><table id="preview" data-output></table></div>
     </details>
     -->
 
     <!-- Categorical variables section hidden at user request; kept here for future use.
     <details class="section">
       <summary>Categorical variables</summary>
-      <p id="catinfo" class="note"></p>
+      <p id="catinfo" class="note" data-output></p>
       <label for="catsearch" class="sr">Search categorical variables</label>
       <input type="search" id="catsearch" placeholder="Search categorical variables…" autocomplete="off">
-      <div id="cat"></div>
+      <div id="cat" data-output></div>
     </details>
     -->
     </div>
@@ -193,8 +193,19 @@
       <p class="sub">Explore distributions, relationships, and missing data.</p>
       <div class="figtypes" id="figtypes" role="group" aria-label="Figure type"></div>
       <div class="figctl" id="figctl"></div>
-      <div class="figwrap" id="figplot"></div>
-      <p class="note" id="figdesc" aria-live="polite"></p>
+      <details class="fig-text-settings" open>
+        <summary>Figure text sizes</summary>
+        <p class="note">Adjust text sizes for this figure. The preview updates as you move the sliders.</p>
+        <div class="fig-text-grid" id="figTextControls">
+          <label class="fig-text-control" for="figFontTitle"><span>Figure title</span><output id="figFontTitleValue" for="figFontTitle" aria-live="polite">15 px</output><input type="range" id="figFontTitle" data-fig-font="title" min="14" max="22" step="1" value="15"></label>
+          <label class="fig-text-control" for="figFontAxis"><span>Axis titles</span><output id="figFontAxisValue" for="figFontAxis" aria-live="polite">12 px</output><input type="range" id="figFontAxis" data-fig-font="axis" min="10" max="20" step="1" value="12"></label>
+          <label class="fig-text-control" for="figFontTick"><span>Tick and category labels</span><output id="figFontTickValue" for="figFontTick" aria-live="polite">11 px</output><input type="range" id="figFontTick" data-fig-font="tick" min="9" max="16" step="1" value="11"></label>
+          <label class="fig-text-control" for="figFontLegend"><span>Legend labels</span><output id="figFontLegendValue" for="figFontLegend" aria-live="polite">11 px</output><input type="range" id="figFontLegend" data-fig-font="legend" min="9" max="16" step="1" value="11"></label>
+          <label class="fig-text-control" for="figFontValue"><span>Value labels</span><output id="figFontValueValue" for="figFontValue" aria-live="polite">11 px</output><input type="range" id="figFontValue" data-fig-font="value" min="9" max="16" step="1" value="11"></label>
+        </div>
+      </details>
+      <div class="figwrap" id="figplot" data-output></div>
+      <p class="note" id="figdesc" data-output aria-live="polite"></p>
       <div class="toolbar">
         <button type="button" class="btn primary" id="figsvg">Download SVG</button>
         <button type="button" class="btn" id="figpng">Download PNG (3×)</button>
@@ -242,9 +253,9 @@
 <dialog id="detail" aria-labelledby="dtitle">
   <h2 id="dtitle"></h2>
   <div class="boxplot-wrap">
-    <canvas id="boxplot" width="700" height="280" role="img" aria-label="Box and whisker plot"></canvas>
+   <canvas id="boxplot" data-output width="700" height="280" role="img" aria-label="Box and whisker plot"></canvas>
   </div>
-  <dl id="dbody" class="grid"></dl>
+  <dl id="dbody" class="grid" data-output></dl>
   <form method="dialog"><button class="btn primary" autofocus>Close</button></form>
 </dialog>
 
