@@ -191,8 +191,8 @@
   }
   function choose(lang) {
     current = languages.includes(lang) ? lang : 'en'; selected = true;
-    const landing = document.getElementById('landing'), prompt = document.getElementById('languagePrompt'), subtitle = document.getElementById('siteSubtitle');
-    if (landing) landing.hidden = false; if (prompt) prompt.hidden = true; if (subtitle) subtitle.hidden = false;
+    const landing = document.getElementById('landing'), subtitle = document.getElementById('siteSubtitle');
+    if (landing) landing.hidden = false; if (subtitle) subtitle.hidden = false;
     translatePage();
     replayLandingFade();
     if (typeof window.onLocaleChange === 'function') window.onLocaleChange(current);
@@ -200,7 +200,7 @@
   function selectLanguage(lang) {
     const first = !selected; current = languages.includes(lang) ? lang : 'en'; selected = true;
     const landing = document.getElementById('landing'), prompt = document.getElementById('languagePrompt'), subtitle = document.getElementById('siteSubtitle');
-    if (landing && first) landing.hidden = false; if (prompt) prompt.hidden = true; if (subtitle) subtitle.hidden = false;
+    if (landing && first) landing.hidden = false; if (subtitle) subtitle.hidden = false;
     translatePage(); replayLandingFade(); if (typeof window.onLocaleChange === 'function') window.onLocaleChange(current);
   }
   function markSelected(lang) { current = lang; selected = true; }
