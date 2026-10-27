@@ -15,7 +15,7 @@ const CONFIG = {
 const MISSING = new Set(['', 'na', 'n/a', 'nan', 'null', 'missing', '.', '-']);
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const displayVariableName = name => window.AppI18n?.text(name) || name;
+const displayVariableName = name => String(window.AppI18n?.text(name) ?? name).replace(/_/g, ' ');
 let sheetJsPromise = null;
 function loadSheetJS() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
@@ -215,10 +215,10 @@ function suggestPatientId(headers, rows) {
 
 function askPatientId(headers, rows) {
   const dialog = $('patientPrompt'), select = $('patientColumn');
-  select.innerHTML = '<option value="">Choose a column…</option>' + headers.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join('');
+  select.innerHTML = '<option value="">Choose a column…</option>' + headers.map(h => `<option value="${esc(h)}">${esc(displayVariableName(h))}</option>`).join('');
   const suggestion = suggestPatientId(headers, rows);
   $('patientSuggestion').hidden = !suggestion;
-  $('patientSuggestion').textContent = suggestion ? `Possible patient ID: “${suggestion.name}” (${suggestion.unique} unique non-missing values). Select it if appropriate. Nothing is excluded until you choose the column and confirm.` : '';
+  $('patientSuggestion').textContent = suggestion ? `Possible patient ID: “${displayVariableName(suggestion.name)}” (${suggestion.unique} unique non-missing values). Select it if appropriate. Nothing is excluded until you choose the column and confirm.` : '';
   $('patientYes').disabled = true;
   dialog.showModal();
   return new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'yes' ? select.value : ''), { once: true }));
@@ -355,7 +355,7 @@ function setMethod(r, choice) {
 }
 function methodSelect(r) {
   const opt = (v, label) => `<option value="${v}"${r.choice === v ? ' selected' : ''}>${label}</option>`;
-  return `<select class="method" data-name="${esc(r.name)}" aria-label="Summary method for ${esc(r.name)}">
+  return `<select class="method" data-name="${esc(r.name)}" aria-label="Summary method for ${esc(displayVariableName(r.name))}">
     ${opt('auto', `Auto: ${r.autoMethod}`)}${opt('Mean (SD)', 'Mean (SD)')}${opt('Median (IQR)', 'Median (IQR)')}</select>`;
 }
 
@@ -381,13 +381,13 @@ function summaryCell(r) {
 function categoryMethodSelect(r) {
   const choice = state.t1.catChoices[r.name] || 'auto';
   const options = [['auto', 'Auto: Counts (percentage)'], ['counts', 'Counts'], ['percentage', 'Percentage'], ['counts_percentage', 'Counts (percentage)']];
-  return `<select class="method" data-cat-method="${esc(r.name)}" aria-label="Summary format for ${esc(r.name)}">${options.map(([v, label]) => `<option value="${v}"${choice === v ? ' selected' : ''}>${label}</option>`).join('')}</select>`;
+  return `<select class="method" data-cat-method="${esc(r.name)}" aria-label="Summary format for ${esc(displayVariableName(r.name))}">${options.map(([v, label]) => `<option value="${v}"${choice === v ? ' selected' : ''}>${label}</option>`).join('')}</select>`;
 }
 
 function renderTable() {
   const view = getView();
-  $('stats').querySelector('tbody').innerHTML = view.length ? view.map(r => `<tr${r.type === 'numeric' ? ' tabindex="0"' : ''} data-name="${esc(r.name)}" data-type="${r.type}"${r.type === 'numeric' ? ` aria-label="Details for ${esc(r.name)}"` : ''}>
-    <td>${esc(r.name)}</td><td class="num">${(r.type === 'numeric' ? r.n : r.nonMissing).toLocaleString(window.AppI18n?.locale || 'en-US')}</td><td class="num">${missingText(r)}</td><td class="summary-cell">${summaryCell(r)}</td><td>${r.type === 'numeric' ? methodSelect(r) : categoryMethodSelect(r)}</td></tr>`).join('')
+  $('stats').querySelector('tbody').innerHTML = view.length ? view.map(r => `<tr${r.type === 'numeric' ? ' tabindex="0"' : ''} data-name="${esc(r.name)}" data-type="${r.type}"${r.type === 'numeric' ? ` aria-label="Details for ${esc(displayVariableName(r.name))}"` : ''}>
+    <td>${esc(displayVariableName(r.name))}</td><td class="num">${(r.type === 'numeric' ? r.n : r.nonMissing).toLocaleString(window.AppI18n?.locale || 'en-US')}</td><td class="num">${missingText(r)}</td><td class="summary-cell">${summaryCell(r)}</td><td>${r.type === 'numeric' ? methodSelect(r) : categoryMethodSelect(r)}</td></tr>`).join('')
     : `<tr><td colspan="5">No summary variables are available.</td></tr>`;
   document.querySelectorAll('#stats th[aria-sort]').forEach(th => {
     const b = th.querySelector('button');
@@ -428,7 +428,7 @@ function showDetail(name) {
     ['Auto-suggested', r.autoMethod]
   ];
 
-  $('dtitle').textContent = r.name;
+  $('dtitle').textContent = displayVariableName(r.name);
   $('dtitle').dataset.variable = r.name;
   $('dtitle').setAttribute('data-raw', '');
 
@@ -682,7 +682,7 @@ function renderTypes() {
   const opts = c => [['auto', 'Auto'], ['numeric', 'Numeric'], ['categorical', 'Categorical'], ['exclude', 'Exclude']]
     .map(([v, l]) => `<option value="${v}"${(state.types[c.name] || 'auto') === v ? ' selected' : ''}>${l}</option>`).join('');
   $('types').innerHTML = `<thead><tr><th scope="col">Variable</th><th scope="col">Current</th><th scope="col">Type</th><th scope="col">In Table 1</th></tr></thead><tbody>${
-    state.cols.map(c => `<tr><td data-raw>${esc(c.name)}</td><td>${c.empty ? 'Empty (skipped)' : c.type === 'excluded' ? 'Excluded' : c.type}</td><td><select class="method" data-tname="${esc(c.name)}" aria-label="Type of ${esc(c.name)}">${opts(c)}</select></td><td><input type="checkbox" data-t1="${esc(c.name)}" aria-label="Include ${esc(c.name)} in Table 1"${state.t1.skip.has(c.name) ? '' : ' checked'}${c.type === 'excluded' ? ' disabled' : ''}></td></tr>`).join('')}</tbody>`;
+    state.cols.map(c => `<tr><td data-raw>${esc(displayVariableName(c.name))}</td><td>${c.empty ? 'Empty (skipped)' : c.type === 'excluded' ? 'Excluded' : c.type}</td><td><select class="method" data-tname="${esc(c.name)}" aria-label="Type of ${esc(displayVariableName(c.name))}">${opts(c)}</select></td><td><input type="checkbox" data-t1="${esc(c.name)}" aria-label="Include ${esc(displayVariableName(c.name))} in Table 1"${state.t1.skip.has(c.name) ? '' : ' checked'}${c.type === 'excluded' ? ' disabled' : ''}></td></tr>`).join('')}</tbody>`;
   if (f) { const el = [...$('types').querySelectorAll('select')].find(e => e.dataset.tname === f); if (el) el.focus(); }
 }
 */
@@ -709,7 +709,7 @@ function renderCategorical() {
   box.replaceChildren();
   c.filter(v => !q || v.name.toLowerCase().includes(q)).forEach(v => {
     const d = document.createElement('details'), s = document.createElement('summary');
-    s.textContent = `${v.name}: ${v.unique.toLocaleString(window.AppI18n?.locale || 'en-US')} level${v.unique === 1 ? '' : 's'}, ${v.missing.toLocaleString(window.AppI18n?.locale || 'en-US')} missing (${localFixed(v.missingPct, 1)}%)`;
+    s.textContent = `${displayVariableName(v.name)}: ${v.unique.toLocaleString(window.AppI18n?.locale || 'en-US')} level${v.unique === 1 ? '' : 's'}, ${v.missing.toLocaleString(window.AppI18n?.locale || 'en-US')} missing (${localFixed(v.missingPct, 1)}%)`;
     d.append(s);
     d.addEventListener('toggle', () => { if (d.open && !d.dataset.done) { d.dataset.done = '1'; d.append(freqTable(v)); } });
     box.append(d);
@@ -719,16 +719,16 @@ function renderCategorical() {
 
 function fillGroupSelect() {
   if (!state.categorical.some(c => c.name === state.t1.group)) state.t1.group = '';
-  $('t1group').innerHTML = '<option value="">None</option>' + state.categorical.map(c => `<option data-raw value="${esc(c.name)}"${c.name === state.t1.group ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+  $('t1group').innerHTML = '<option value="">None</option>' + state.categorical.map(c => `<option data-raw value="${esc(c.name)}"${c.name === state.t1.group ? ' selected' : ''}>${esc(displayVariableName(c.name))}</option>`).join('');
   const selectable = state.headers.filter(name => name !== state.patientId);
-  $('t1variables').innerHTML = selectable.map(name => `<label class="t1-variable"><input type="checkbox" data-t1-variable="${esc(name)}"${state.t1.selected.has(name) ? ' checked' : ''}><span data-raw>${esc(name)}</span></label>`).join('');
+  $('t1variables').innerHTML = selectable.map(name => `<label class="t1-variable"><input type="checkbox" data-t1-variable="${esc(name)}"${state.t1.selected.has(name) ? ' checked' : ''}><span data-raw>${esc(displayVariableName(name))}</span></label>`).join('');
   $('t1variablesLabel').textContent = `Select variables (${state.t1.selected.size}/${selectable.length})`;
   renderCategoricalSettings();
 }
 
 function renderCategoricalSettings() {
   const options = [['auto', 'Auto: Counts (percentage)'], ['counts', 'Counts'], ['percentage', 'Percentage'], ['counts_percentage', 'Counts (percentage)']];
-  $('catSettings').innerHTML = state.categorical.map(r => '<label class="cat-setting"><span data-raw>' + esc(r.name) + '</span><select class="method" data-cat-method="' + esc(r.name) + '" aria-label="Summary format for ' + esc(r.name) + '">' + options.map(([v, label]) => '<option value="' + v + '"' + ((state.t1.catChoices[r.name] || 'auto') === v ? ' selected' : '') + '>' + label + '</option>').join('') + '</select></label>').join('') || '<p class="note">No categorical variables were detected.</p>';
+  $('catSettings').innerHTML = state.categorical.map(r => '<label class="cat-setting"><span data-raw>' + esc(displayVariableName(r.name)) + '</span><select class="method" data-cat-method="' + esc(r.name) + '" aria-label="Summary format for ' + esc(displayVariableName(r.name)) + '">' + options.map(([v, label]) => '<option value="' + v + '"' + ((state.t1.catChoices[r.name] || 'auto') === v ? ' selected' : '') + '>' + label + '</option>').join('') + '</select></label>').join('') || '<p class="note">No categorical variables were detected.</p>';
 }
 
 // ---------- Group comparison tests (kept independent of Table 1 rendering) ----------
@@ -953,7 +953,7 @@ function buildTable1() {
     comparisonSets = [...g.freq.keys()].sort(nat).map(k => ({ label: k, idx: all.filter(i => g.labels[i] === k) }));
     comparisonSets.forEach(s => sets.push(s));
     const miss = all.filter(i => g.labels[i] === null);
-    if (miss.length) { sets.push({ label: 'Missing group', idx: miss }); notes.push(`${miss.length} row(s) have a missing “${g.name}” value; they appear under “Missing group” and are included in Overall.`); }
+    if (miss.length) { sets.push({ label: 'Missing group', idx: miss }); notes.push(`${miss.length} row(s) have a missing “${displayVariableName(g.name)}” value; they appear under “Missing group” and are included in Overall.`); }
   }
   const includeTests = Boolean(g && state.t1.showPValues);
   const p = test => includeTests ? pText(test) : '';
@@ -1113,8 +1113,8 @@ function figHist(f) {
   v.forEach(x => c[Math.min(k - 1, Math.floor((x - a) / w))]++);
   const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 56 }, ymax = Math.max(...c), sx = lin(a, b, d.l, d.W - d.r), sy = lin(0, ymax, d.H - d.b, d.t);
   const bars = c.map((n, i) => `<rect x="${sx(a + i * w) + 0.5}" y="${sy(n)}" width="${Math.max(0, sx(a + (i + 1) * w) - sx(a + i * w) - 1)}" height="${sy(0) - sy(n)}" fill="${PAL[0]}"/>`).join('');
-  return done(frame(d, yAx(d, sy, niceTicks(0, ymax)) + bars + xAx(d, sx, niceTicks(a, b)), `Distribution of ${cut(r.name, 50)}`, r.name, 'Frequency'), d,
-    `Histogram of ${r.name}: n = ${v.length} plotted; ${state.rows.length - v.length} missing or non-numeric excluded; ${k} bin${k === 1 ? '' : 's'} of width ${tl(w)}.`);
+  return done(frame(d, yAx(d, sy, niceTicks(0, ymax)) + bars + xAx(d, sx, niceTicks(a, b)), `Distribution of ${cut(displayVariableName(r.name), 50)}`, displayVariableName(r.name), 'Frequency'), d,
+    `Histogram of ${displayVariableName(r.name)}: n = ${v.length} plotted; ${state.rows.length - v.length} missing or non-numeric excluded; ${k} bin${k === 1 ? '' : 's'} of width ${tl(w)}.`);
 }
 
 function figBox(f) {
@@ -1137,8 +1137,8 @@ function figBox(f) {
       + (g ? T(cx, d.H - d.b + 16, cut(G.label, 12), 'middle', '#1d2430', 11) : '') + T(cx, d.H - d.b + (g ? 30 : 16), `n=${G.v.length}`, 'middle', '#5b6573', 10);
   }).join('');
   const ax = yAx(d, sy, niceTicks(lo - pad, hi + pad)) + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
-  return done(frame(d, ax + body, g ? `${cut(r.name, 30)} by ${cut(g.name, 25)}` : cut(r.name, 60), g ? g.name : '', r.name), d,
-    `Box plot of ${r.name}${g ? ` by ${g.name}` : ''}: n = ${all.length} plotted. Box = Q1–Q3 (R type 7) with median line; whiskers reach the most extreme values within 1.5×IQR; circles beyond are outliers and are not removed. Excluded: ${r.nums.length - r.nums.filter(x => x !== null).length} missing/non-numeric${g ? `; ${excl} with missing group; ${hiddenObs} in ${hiddenLv} less frequent level(s) not shown (max 12 groups)` : ''}.`);
+  return done(frame(d, ax + body, g ? `${cut(displayVariableName(r.name), 30)} by ${cut(displayVariableName(g.name), 25)}` : cut(displayVariableName(r.name), 60), g ? displayVariableName(g.name) : '', displayVariableName(r.name)), d,
+    `Box plot of ${displayVariableName(r.name)}${g ? ` by ${displayVariableName(g.name)}` : ''}: n = ${all.length} plotted. Box = Q1–Q3 (R type 7) with median line; whiskers reach the most extreme values within 1.5×IQR; circles beyond are outliers and are not removed. Excluded: ${r.nums.length - r.nums.filter(x => x !== null).length} missing/non-numeric${g ? `; ${excl} with missing group; ${hiddenObs} in ${hiddenLv} less frequent level(s) not shown (max 12 groups)` : ''}.`);
 }
 
 function figBar(f) {
@@ -1146,13 +1146,13 @@ function figBar(f) {
   const lv = byFreq(c), shown = lv.slice(0, 15), hid = lv.length - shown.length, pct = f.mode === 'pct';
   const d = { W: 640, H: 104 + 26 * shown.length, l: 140, r: 90, t: 40, b: 56 }, vals = shown.map(([, n]) => pct ? 100 * n / c.nonMissing : n), mx = Math.max(...vals), sx = lin(0, mx, d.l, d.W - d.r);
   const bars = shown.map(([k, n], i) => { const y = d.t + 8 + i * 26, p = 100 * n / c.nonMissing; return T(d.l - 6, y + 14, cut(k, 20), 'end', '#1d2430', 11) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(vals[i]) - d.l)}" height="20" fill="${PAL[0]}"/>` + T(sx(vals[i]) + 4, y + 14, `${n.toLocaleString(window.AppI18n?.locale || 'en-US')} (${localFixed(p, 1)}%)`, 'start', '#1d2430', 11); }).join('');
-  return done(frame(d, xAx(d, sx, niceTicks(0, mx)) + bars, cut(c.name, 60), pct ? `Percent of non-missing (n = ${c.nonMissing})` : 'Count', ''), d,
-    `Bar chart of ${c.name}: ${c.nonMissing} non-missing observations; ${c.missing} missing excluded from percentages.${hid ? ` Showing the 15 most frequent of ${lv.length} levels; ${hid} not shown.` : ''}`);
+  return done(frame(d, xAx(d, sx, niceTicks(0, mx)) + bars, cut(displayVariableName(c.name), 60), pct ? `Percent of non-missing (n = ${c.nonMissing})` : 'Count', ''), d,
+    `Bar chart of ${displayVariableName(c.name)}: ${c.nonMissing} non-missing observations; ${c.missing} missing excluded from percentages.${hid ? ` Showing the 15 most frequent of ${lv.length} levels; ${hid} not shown.` : ''}`);
 }
 
 function figMiss() {
   const n = state.rows.length;
-  const items = state.cols.filter(c => (c.type !== 'excluded' || c.empty) && c.name !== state.patientId).map(c => [c.name, c.missing]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const items = state.cols.filter(c => (c.type !== 'excluded' || c.empty) && c.name !== state.patientId).map(c => [displayVariableName(c.name), c.missing]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const d = { W: 640, H: 104 + 22 * items.length, l: 150, r: 90, t: 40, b: 56 }, sx = lin(0, 100, d.l, d.W - d.r);
   const bars = items.map(([h, m], i) => { const y = d.t + 8 + i * 22, p = 100 * m / n; return T(d.l - 6, y + 13, cut(h, 22), 'end', '#1d2430', 11) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(p) - d.l)}" height="16" fill="${PAL[0]}"/>` + T(sx(p) + 4, y + 12, `${m.toLocaleString(window.AppI18n?.locale || 'en-US')} (${localFixed(p, 1)}%)`, 'start', '#1d2430', 11); }).join('');
   return done(frame(d, xAx(d, sx, [0, 25, 50, 75, 100]) + bars, 'Missing values by variable', `Percent of ${n} rows missing`, ''), d,
@@ -1162,7 +1162,7 @@ function figMiss() {
 function figScatter(f) {
   const X = numVar(f.x), Y = numVar(f.y); if (!X || !Y) return need('num');
   let g = f.g ? catVar(f.g) : null, note = '';
-  if (g && g.unique > 7) { note = ` Color-by “${g.name}” ignored (more than 7 levels).`; g = null; }
+  if (g && g.unique > 7) { note = ` Color-by “${displayVariableName(g.name)}” ignored (more than 7 levels).`; g = null; }
   const lv = g ? byFreq(g).map(x => x[0]) : [], pts = []; let exclG = 0;
   state.rows.forEach((_, i) => { const x = X.nums[i], y = Y.nums[i]; if (x === null || y === null) return; if (g && g.labels[i] === null) { exclG++; return; } pts.push([x, y, g ? lv.indexOf(g.labels[i]) : 0]); });
   if (!pts.length) return { msg: 'No observations have valid values for both variables.' };
@@ -1171,8 +1171,8 @@ function figScatter(f) {
   const d = { W: 640, H: 400, l: 62, r: 20, t: g ? 52 : 40, b: 56 }, sx = lin(x0, x1, d.l, d.W - d.r), sy = lin(y0, y1, d.H - d.b, d.t);
   let lx = d.l; const leg = g ? lv.map((k, i) => { const s = `<circle cx="${lx + 5}" cy="36" r="4" fill="${PAL[i]}"/>${T(lx + 13, 40, cut(k, 14), 'start', '#1d2430', 11)}`; lx += 28 + Math.min(14, k.length) * 6; return s; }).join('') : '';
   const dots = pts.map(p => `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="3" fill="${PAL[p[2]]}" fill-opacity=".65"/>`).join('');
-  return done(frame(d, yAx(d, sy, niceTicks(y0, y1)) + xAx(d, sx, niceTicks(x0, x1)) + dots, `${cut(Y.name, 28)} vs ${cut(X.name, 28)}`, X.name, Y.name, leg), d,
-    `Scatter plot: ${pts.length} of ${state.rows.length} observations shown (pairs with a missing or non-numeric X or Y excluded${g ? `; ${exclG} excluded for missing ${g.name}` : ''}). No trend line is fitted.${note}`);
+  return done(frame(d, yAx(d, sy, niceTicks(y0, y1)) + xAx(d, sx, niceTicks(x0, x1)) + dots, `${cut(displayVariableName(Y.name), 28)} vs ${cut(displayVariableName(X.name), 28)}`, displayVariableName(X.name), displayVariableName(Y.name), leg), d,
+    `Scatter plot: ${pts.length} of ${state.rows.length} observations shown (pairs with a missing or non-numeric X or Y excluded${g ? `; ${exclG} excluded for missing ${displayVariableName(g.name)}` : ''}). No trend line is fitted.${note}`);
 }
 
 function figRefresh() {
@@ -1183,7 +1183,7 @@ function figRefresh() {
   if (!cat.includes(f.c)) f.c = cat[0] || '';
   if (f.g && !cat.includes(f.g)) f.g = '';
   $('figtypes').innerHTML = Object.entries(FIGS).map(([k, v]) => `<button type="button" class="figtype" data-fig="${k}" aria-pressed="${f.type === k}"><svg viewBox="0 0 24 24" aria-hidden="true">${v.icon}</svg><strong>${v.name}</strong><span>${v.info}</span><em>${v.needs}</em></button>`).join('');
-  const S = (id, label, list, val, none) => `<label for="fig${id}">${label}</label><select id="fig${id}" class="method" data-f="${id}">${none ? '<option value="">None</option>' : ''}${list.map(n => `<option data-raw value="${esc(n)}"${n === val ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
+  const S = (id, label, list, val, none) => `<label for="fig${id}">${label}</label><select id="fig${id}" class="method" data-f="${id}">${none ? '<option value="">None</option>' : ''}${list.map(n => `<option data-raw value="${esc(n)}"${n === val ? ' selected' : ''}>${esc(displayVariableName(n))}</option>`).join('')}</select>`;
   $('figctl').innerHTML = { hist: () => S('x', 'Variable', num, f.x) + `<label for="figbins">Bins</label><input id="figbins" data-f="bins" type="number" min="1" max="100" placeholder="Auto" value="${f.bins || ''}">`,
     box: () => S('x', 'Variable', num, f.x) + S('g', 'Group by', cat, f.g, true), bar: () => S('c', 'Variable', cat, f.c) + `<label for="figmode">Show</label><select id="figmode" class="method" data-f="mode"><option value="count"${f.mode === 'count' ? ' selected' : ''}>Counts</option><option value="pct"${f.mode === 'pct' ? ' selected' : ''}>Percent</option></select>`,
     miss: () => '', scatter: () => S('x', 'X', num, f.x) + S('y', 'Y', num, f.y) + S('g', 'Color by', cat, f.g, true) }[f.type]();
