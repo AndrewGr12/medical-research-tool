@@ -172,8 +172,10 @@ function analyzeColumn(name, idx, rows, warnings, forced) {
     if (nonNum) warnings.push(`“${name}”: ${nonNum} non-numeric value(s) were counted as missing.`);
     const s = computeStats(vals), auto = chooseMethod(s);
     if (s.sd === 0) warnings.push(`“${name}” is constant.`);
+    /* Temporarily disabled: integer-coded clinical flags were generating repetitive Notes.
     const distinct = new Set(vals).size;
     if (!forced && vals.length > 1 && distinct <= 5 && vals.every(Number.isInteger)) warnings.push(`“${name}” has only ${distinct} distinct integer values; it may be categorical.`);
+    */
     return { type: 'numeric', name, nums, missing, missingPct, autoMethod: auto, choice: 'auto', method: auto, ...s };
   }
   const nonMissing = rawNonMissing, missingPct = (missing / total) * 100;
