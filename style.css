@@ -87,6 +87,11 @@ dialog{border:1px solid var(--line);border-radius:6px;padding:18px 20px;max-widt
 dialog::backdrop{background:rgba(20,28,40,.35)}
 dialog#patientPrompt,dialog#sheetPrompt{max-width:520px}#patientPrompt p,#sheetPrompt p{margin:0 0 14px;color:var(--mute)}#patientPrompt>label,#sheetPrompt>label{display:block;margin:8px 0 5px;font-size:.9rem}#patientColumn,#sheetChoice{width:100%;padding:8px}.patient-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}.patient-notice{margin:12px 0 0}#patientYes:disabled,#patientYes:disabled:hover{opacity:.48;cursor:not-allowed;background:#e5e8ec;border-color:#c5cbd3;color:#747d89;box-shadow:none}.patient-suggestion{margin-top:12px!important;padding:9px 11px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:3px}
 dialog h2{margin-top:0;word-break:break-word}
+.patient-prompt-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:0 0 8px}
+.patient-prompt-heading h2{margin:0;flex:1}
+.patient-dialog-close{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;margin:-3px -4px 0 0;padding:0;border:1px solid var(--line);border-radius:50%;background:#fff;color:var(--mute);font:400 1.6rem/1 var(--font);cursor:pointer;transition:background-color .14s ease,border-color .14s ease,color .14s ease}
+.patient-dialog-close:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.patient-dialog-close:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .grid{display:grid;grid-template-columns:auto 1fr;gap:6px 20px;font-size:.9rem;margin:0 0 16px}
 .grid dt{color:var(--mute)}.grid dd{margin:0;font-variant-numeric:tabular-nums}
 .boxplot-wrap{width:100%;overflow-x:auto;margin:8px 0 16px;border:1px solid var(--line);border-radius:4px;background:#fff}
@@ -146,6 +151,12 @@ td.ind{padding-left:28px}
 .fade-out{opacity:0;transform:translateY(-4px);transition:opacity .2s ease-in-out,transform .2s ease-in-out}
 dialog[open]{animation:fadeIn .54s ease-in-out both}
 dialog[open]::backdrop{animation:backdropIn .54s ease-in-out both}
+#uploadConsentPrompt{max-width:600px;border-radius:12px}
+#uploadConsentPrompt h2{margin-top:0}
+#uploadConsentPrompt p{margin:0;color:var(--ink);font-size:1rem;line-height:1.55}
+#uploadConsentPrompt .upload-consent-actions{justify-content:flex-end;margin-top:20px}
+#uploadConsentPrompt[open]{animation:fadeIn .54s ease-in-out both}
+#uploadConsentPrompt[open]::backdrop{animation:backdropIn .54s ease-in-out both}
 .warn:not([hidden]),.error:not([hidden]){animation:fadeIn .54s ease-in-out both}
 .btn,.path,.figtype,.drop{transition:background-color .14s ease,border-color .14s ease}
 #stats tbody tr{transition:background-color .11s ease}
@@ -160,3 +171,4 @@ dialog[open]::backdrop{animation:backdropIn .54s ease-in-out both}
 #home.compact .path span{display:block;font-size:1.2rem;line-height:1.4}
 @media(max-width:600px){#home.compact .paths{width:100%;grid-template-columns:1fr 1fr;gap:8px}#home.compact .path{padding:12px}#home.compact .path svg{width:20px;height:20px}#home.compact .path strong{font-size:1.15rem}#home.compact .path span{display:block;font-size:1.05rem;line-height:1.35}}
 @media(prefers-reduced-motion:reduce){*,::backdrop{animation:none!important;transition:none!important}}
+@media(max-width:600px){#uploadConsentPrompt .upload-consent-actions{flex-direction:column-reverse}#uploadConsentPrompt .upload-consent-actions .btn{width:100%}}

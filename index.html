@@ -233,6 +233,15 @@
   <footer class="privacy"><span>Files are processed locally in your browser and are not uploaded. Excel support loads the SheetJS parser from its CDN; workbook data stays on your device. Local processing alone does not ensure HIPAA or institutional compliance.</span><span class="copyright" data-raw>© <span id="copyrightYear">2026</span> Data Analysis Assistant</span></footer>
 </main>
 
+<dialog id="uploadConsentPrompt" aria-labelledby="uploadConsentTitle" aria-describedby="uploadConsentDescription">
+  <h2 id="uploadConsentTitle">Confirm data de-identification</h2>
+  <p id="uploadConsentDescription">Before this file is processed, confirm that it contains only de-identified information and no patient names, dates of birth, medical record numbers, contact information, or other direct identifiers. You are responsible for ensuring that you are authorized to use and upload this data.</p>
+  <div class="patient-actions upload-consent-actions">
+    <button type="button" class="btn" id="uploadConsentCancel">No, cancel upload</button>
+    <button type="button" class="btn primary" id="uploadConsentConfirm">Yes, I confirm</button>
+  </div>
+</dialog>
+
 <dialog id="sheetPrompt" aria-labelledby="sheetTitle" aria-describedby="sheetDescription">
   <h2 id="sheetTitle">Choose a worksheet</h2>
   <p id="sheetDescription">This workbook contains multiple worksheets. Select the worksheet you want to analyze.</p>
@@ -242,7 +251,10 @@
 </dialog>
 
 <dialog id="patientPrompt" aria-labelledby="patientTitle" aria-describedby="patientDescription">
-  <h2 id="patientTitle">Identify a patient ID column</h2>
+  <div class="patient-prompt-heading">
+    <h2 id="patientTitle">Identify a patient ID column</h2>
+    <button type="button" class="patient-dialog-close" id="patientClose" aria-label="Close" title="Close"><span aria-hidden="true">×</span></button>
+  </div>
   <p id="patientDescription">A patient ID is a code, number, or label used to identify an individual patient. Does this file have one? Choose its column, then exclude it from summaries and figures; its values will also be hidden from the data preview.</p>
   <label for="patientColumn">Patient ID column</label>
   <select id="patientColumn" class="method"><option value="">Choose a column…</option></select>

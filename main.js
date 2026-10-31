@@ -18,6 +18,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const displayVariableName = name => String(name).replace(/_/g, ' ');
 let sheetJsPromise = null;
+let pendingUploadFile = null;
 function loadSheetJS() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
   if (!sheetJsPromise) sheetJsPromise = new Promise((resolve, reject) => {
@@ -217,6 +218,20 @@ function suggestPatientId(headers, rows) {
   return null;
 }
 
+function patientIdChoice(returnValue, selectedValue) {
+  if (returnValue === 'yes') return selectedValue;
+  if (returnValue === 'no') return '';
+  return null;
+}
+
+function filterIdentifierNotesAfterNoPatientId(warnings, noPatientIdSelected) {
+  if (!noPatientIdSelected) return warnings;
+  return warnings.filter(message => !(
+    /^“.+” looks like a possible identifier because most non-missing values are unique; review its variable type or exclude it if appropriate\.$/.test(message) ||
+    /^“.+” has all-distinct values \(possible identifier\)\.$/.test(message)
+  ));
+}
+
 function askPatientId(headers, rows) {
   const dialog = $('patientPrompt'), select = $('patientColumn');
   select.innerHTML = '<option value="">Choose a column…</option>' + headers.map(h => `<option value="${esc(h)}">${esc(displayVariableName(h))}</option>`).join('');
@@ -224,8 +239,9 @@ function askPatientId(headers, rows) {
   $('patientSuggestion').hidden = !suggestion;
   $('patientSuggestion').textContent = suggestion ? `Possible patient ID: “${displayVariableName(suggestion.name)}” (${suggestion.unique} unique non-missing values). Select it if appropriate. Nothing is excluded until you choose the column and confirm.` : '';
   $('patientYes').disabled = true;
+  dialog.returnValue = '';
   dialog.showModal();
-  return new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'yes' ? select.value : ''), { once: true }));
+  return new Promise(resolve => dialog.addEventListener('close', () => resolve(patientIdChoice(dialog.returnValue, select.value)), { once: true }));
 }
 
 function chooseWorksheet(sheetNames) {
@@ -254,6 +270,12 @@ async function loadText(text, name, options = {}) {
     const dup = rows.length - new Set(rows.map(r => r.join('\u0001'))).size;
     if (dup) warnings.push(`${dup} duplicate row(s) found; none were removed.`);
     const patientId = options.skipPatientPrompt ? '' : await askPatientId(headers, rows);
+    if (patientId === null) {
+      $('file').value = '';
+      setStatus(''); showError('');
+      return;
+    }
+    const noPatientIdSelected = !options.skipPatientPrompt && patientId === '';
     if (!options.skipPatientPrompt) setStatus('Choose whether to exclude a patient ID column…');
     state.patientId = patientId;
     state.types = {}; state.choices = {};
@@ -267,7 +289,7 @@ async function loadText(text, name, options = {}) {
     const a = await analyzeAll(headers, rows);
     Object.assign(state, { baseWarnings: warnings, excluded: a.excluded, cols: a.cols, fileName: name, headers, rows, results: a.results, categorical: a.categorical, sortKey: null, sortDir: 1 });
     state.fig = null; state.view = 'home';
-    renderAll([...warnings, ...a.warnings]);
+    renderAll(filterIdentifierNotesAfterNoPatientId([...warnings, ...a.warnings], noPatientIdSelected));
     /* Patient ID warning banner disabled by request:
     if (patientId) {
       $('patientNotice').textContent = `Patient ID column “${patientId}” is excluded from summaries and figures. It is hidden in the data preview and is not included in Table 1.`;
@@ -308,6 +330,19 @@ async function handleFile(file) {
     return;
   }
   showError('Please choose a CSV file or an Excel workbook (.xlsx, .xls, .xlsm, or .xlsb).');
+}
+
+function requestUploadConsent(file) {
+  if (!file) return;
+  pendingUploadFile = file;
+  const dialog = $('uploadConsentPrompt');
+  dialog.returnValue = '';
+  dialog.showModal();
+  $('uploadConsentConfirm').focus();
+}
+
+function uploadConsentGranted(dialog, file) {
+  return dialog.returnValue === 'confirm' && Boolean(file);
 }
 
 // ---------- Rendering ----------
@@ -1385,11 +1420,21 @@ function init() {
   $('patientColumn').addEventListener('change', e => { $('patientYes').disabled = !e.target.value; });
   $('patientYes').addEventListener('click', () => { if ($('patientColumn').value) $('patientPrompt').close('yes'); });
   $('patientNo').addEventListener('click', () => $('patientPrompt').close('no'));
-  $('file').addEventListener('change', e => handleFile(e.target.files[0]));
+  $('patientClose').addEventListener('click', () => $('patientPrompt').close('cancel'));
+  const uploadConsent = $('uploadConsentPrompt');
+  uploadConsent.addEventListener('close', () => {
+    const file = pendingUploadFile;
+    pendingUploadFile = null;
+    if (uploadConsentGranted(uploadConsent, file)) handleFile(file);
+    else { $('file').value = ''; setStatus(''); }
+  });
+  $('uploadConsentConfirm').addEventListener('click', () => uploadConsent.close('confirm'));
+  $('uploadConsentCancel').addEventListener('click', () => uploadConsent.close('cancel'));
+  $('file').addEventListener('change', e => requestUploadConsent(e.target.files[0]));
   const drop = $('drop');
   ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
-  drop.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+  drop.addEventListener('drop', e => requestUploadConsent(e.dataTransfer.files[0]));
   ['dragover', 'drop'].forEach(t => window.addEventListener(t, e => e.preventDefault()));
   $('sample').addEventListener('click', () => loadText(sampleCSV(), 'sample_data.csv', { skipPatientPrompt: true }));
   $('reset').addEventListener('click', reset);

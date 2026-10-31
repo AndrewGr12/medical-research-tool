@@ -53,6 +53,12 @@
     ['Legend labels','Libellés de la légende','Etiquetas de la leyenda','Подписи легенды'],
     ['Value labels','Étiquettes de valeur','Etiquetas de valores','Подписи значений']
   ];
+  rows.push(
+    ['Confirm data de-identification','Confirmer la dé-identification des données','Confirme la desidentificación de los datos','Подтвердите обезличивание данных'],
+    ['Before this file is processed, confirm that it contains only de-identified information and no patient names, dates of birth, medical record numbers, contact information, or other direct identifiers. You are responsible for ensuring that you are authorized to use and upload this data.','Avant le traitement de ce fichier, confirmez qu’il ne contient que des données dé-identifiées, sans nom de patient, date de naissance, numéro de dossier médical, coordonnées ni autre identifiant direct. Il vous appartient de vérifier que vous êtes autorisé à utiliser et à importer ces données.','Antes de procesar este archivo, confirme que solo contiene datos desidentificados y que no incluye nombres de pacientes, fechas de nacimiento, números de historia clínica, datos de contacto ni otros identificadores directos. Usted es responsable de comprobar que tiene autorización para usar y subir estos datos.','Перед обработкой этого файла подтвердите, что он содержит только обезличенные данные и не содержит имен пациентов, дат рождения, номеров медицинских карт, контактных данных или других прямых идентификаторов. Вы отвечаете за то, чтобы убедиться в наличии у вас разрешения на использование и загрузку этих данных.'],
+    ['No, cancel upload','Non, annuler l’importation','No, cancelar la carga','Нет, отменить загрузку'],
+    ['Yes, I confirm','Oui, je confirme','Sí, confirmo','Да, подтверждаю']
+  );
   const languages = ['en', 'fr', 'es', 'ru', 'ar'];
   const dict = Object.fromEntries(languages.map(l => [l, new Map()]));
   const reverse = new Map();
@@ -72,6 +78,10 @@
   ]);
   for (const row of rows) if (!outputOnlyKeys.has(row[0])) for (let i = 0; i < languages.length; i++) { const value = row[i] ?? row[0]; dict[languages[i]].set(row[0], value); reverse.set(value, row[0]); }
   const arabic = new Map([
+    ['Confirm data de-identification','تأكيد إزالة الهوية من البيانات'],
+    ['Before this file is processed, confirm that it contains only de-identified information and no patient names, dates of birth, medical record numbers, contact information, or other direct identifiers. You are responsible for ensuring that you are authorized to use and upload this data.','قبل معالجة هذا الملف، أكّد أنه يحتوي على بيانات منزوعة الهوية فقط، ولا يتضمن أسماء المرضى أو تواريخ الميلاد أو أرقام السجلات الطبية أو بيانات الاتصال أو أي معرّفات مباشرة أخرى. أنت مسؤول عن التأكد من حصولك على الإذن اللازم لاستخدام هذه البيانات ورفعها.'],
+    ['No, cancel upload','لا، ألغِ الرفع'],
+    ['Yes, I confirm','نعم، أؤكد'],
     ['Data Analysis Assistant','مساعد تحليل البيانات'],
     ['Upload a CSV or Excel workbook to generate descriptive statistics.','قم بتحميل ملف CSV أو مصنف Excel لإنشاء الإحصاءات الوصفية.'],
     ['Transform your clinical data into tables and visualizations!','حوّل بياناتك السريرية إلى جداول ورسوم مرئية!'],

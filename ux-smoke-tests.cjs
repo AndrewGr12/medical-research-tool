@@ -32,6 +32,35 @@ assert.match(html, /<main\b/i, 'main landmark is present');
 assert.match(html, /<h1\b/i, 'page has a primary heading');
 assert.match(html, /id="file"[^>]*accept="[^"]*\.csv[^"]*\.xlsx/i, 'CSV and Excel upload is available');
 assert.match(html, /id="sample"/, 'sample-data action is present');
+const uploadConsentHtml = html.match(/<dialog id="uploadConsentPrompt"[\s\S]*?<\/dialog>/)?.[0] || '';
+assert.ok(uploadConsentHtml, 'file upload confirmation dialog exists');
+assert.match(uploadConsentHtml, /aria-labelledby="uploadConsentTitle"[^>]*aria-describedby="uploadConsentDescription"/, 'upload confirmation has an accessible name and description');
+assert.match(uploadConsentHtml, /id="uploadConsentConfirm"/, 'upload confirmation includes an explicit affirmative action');
+assert.match(uploadConsentHtml, /id="uploadConsentCancel"/, 'upload confirmation includes a cancel action');
+assert.match(js, /addEventListener\('change', e => requestUploadConsent\(e\.target\.files\[0\]\)\)/, 'file picker asks for confirmation before processing');
+assert.match(js, /drop\.addEventListener\('drop', e => requestUploadConsent\(e\.dataTransfer\.files\[0\]\)\)/, 'drag-and-drop asks for confirmation before processing');
+assert.match(js, /uploadConsent\.addEventListener\('close',[\s\S]*?uploadConsentGranted\(uploadConsent, file\)[\s\S]*?handleFile\(file\)/, 'file processing starts only after affirmative consent');
+assert.match(js, /dialog\.showModal\(\)/, 'confirmation is presented in a native modal dialog');
+assert.match(css, /#uploadConsentPrompt\[open\]\{animation:fadeIn/, 'upload confirmation uses the existing fade-in effect');
+assert.match(html, /<button[^>]*id="patientClose"[^>]*aria-label="Close"[^>]*title="Close"/, 'patient ID dialog has a labeled close control');
+assert.match(js, /patientClose'\)\.addEventListener\('click', \(\) => \$\('patientPrompt'\)\.close\('cancel'\)\)/, 'close control cancels patient ID selection');
+assert.match(js, /if \(patientId === null\) \{[\s\S]*?\$\('file'\)\.value = '';[\s\S]*?return;[\s\S]*?\}/, 'canceling patient ID selection clears the file and returns before analysis');
+const patientChoiceHelper = js.match(/^function patientIdChoice\([\s\S]*?^\}/m)?.[0];
+assert.ok(patientChoiceHelper, 'patient ID dialog choices are isolated for behavior checks');
+const patientChoiceApi = vm.runInNewContext(`${patientChoiceHelper}\n({ patientIdChoice })`);
+assert.equal(patientChoiceApi.patientIdChoice('yes', 'record_id'), 'record_id', 'affirmative patient ID choice excludes the selected ID');
+assert.equal(patientChoiceApi.patientIdChoice('no', 'record_id'), '', 'No patient ID continues analysis without exclusion');
+assert.equal(patientChoiceApi.patientIdChoice('cancel', 'record_id'), null, 'closing the patient ID dialog cancels the upload flow');
+const identifierFilterSource = js.match(/^function filterIdentifierNotesAfterNoPatientId\([\s\S]*?^\}/m)?.[0];
+assert.ok(identifierFilterSource, 'identifier-note filtering is isolated for behavior checks');
+const identifierFilterApi = vm.runInNewContext(`${identifierFilterSource}\n({ filterIdentifierNotesAfterNoPatientId })`);
+const idNotices = [
+  '“patient_id” looks like a possible identifier because most non-missing values are unique; review its variable type or exclude it if appropriate.',
+  '“patient_id” has all-distinct values (possible identifier).',
+  '“Age” has 20% missing values.'
+];
+assert.deepEqual(JSON.parse(JSON.stringify(identifierFilterApi.filterIdentifierNotesAfterNoPatientId(idNotices, true))), ['“Age” has 20% missing values.'], 'No patient ID suppresses only the two possible-identifier notes');
+assert.deepEqual(JSON.parse(JSON.stringify(identifierFilterApi.filterIdentifierNotesAfterNoPatientId(idNotices, false))), idNotices, 'other patient-ID choices leave all notes unchanged');
 assert.match(html, /id="t1"/, 'Table 1 is present');
 assert.match(rawHtml, /<!-- Table 1 Copy action temporarily disabled; retained for future use\.[\s\S]*?id="t1copy"[\s\S]*?-->/, 'Table 1 Copy button remains commented out');
 assert.doesNotMatch(html, /<button[^>]*id="t1copy"/, 'Table 1 Copy button is not active');
@@ -148,6 +177,27 @@ vm.runInContext(locales, localeContext, { filename: 'locales.js' });
 for (const [language, expected] of Object.entries({ en: 'Upload', fr: 'Importation', es: 'Carga de datos', ru: 'Загрузка данных', ar: 'رفع ملف' })) {
   assert.equal(localeContext.window.AppI18n.text('Upload', language), expected, `${language} retains an Upload translation`);
 }
+const uploadConsentStrings = [
+  'Confirm data de-identification',
+  'Before this file is processed, confirm that it contains only de-identified information and no patient names, dates of birth, medical record numbers, contact information, or other direct identifiers. You are responsible for ensuring that you are authorized to use and upload this data.',
+  'No, cancel upload', 'Yes, I confirm'
+];
+for (const phrase of uploadConsentStrings) for (const language of ['fr', 'es', 'ru', 'ar']) {
+  const translation = localeContext.window.AppI18n.text(phrase, language);
+  assert.ok(translation && translation !== phrase, `${language} translates upload-consent string: ${phrase}`);
+  if (language === 'ar') assert.match(translation, /[\u0600-\u06FF]/, `Arabic upload-consent string uses Arabic script: ${phrase}`);
+}
+for (const [language, pattern] of Object.entries({ fr: /dé-identifiées/, es: /desidentificados/, ru: /обезличенные/, ar: /منزوعة الهوية/ })) {
+  const text = uploadConsentStrings[1];
+  assert.match(localeContext.window.AppI18n.text(text, language), pattern, `${language} retains the de-identified data requirement`);
+}
+const uploadConsentSource = js.match(/^function uploadConsentGranted\([\s\S]*?^\}/m)?.[0];
+assert.ok(uploadConsentSource, 'upload consent decision can be behavior-tested');
+const uploadConsentGate = vm.runInNewContext(`${uploadConsentSource}\n({ uploadConsentGranted })`);
+const pickedFile = { name: 'research.csv' };
+assert.equal(uploadConsentGate.uploadConsentGranted({ returnValue: 'confirm' }, pickedFile), true, 'affirmative consent allows file processing');
+assert.equal(uploadConsentGate.uploadConsentGranted({ returnValue: 'cancel' }, pickedFile), false, 'declining or closing the modal does not process the file');
+assert.equal(uploadConsentGate.uploadConsentGranted({ returnValue: 'confirm' }, null), false, 'empty file selections do not start processing');
 assert.equal(localeContext.window.AppI18n.text('Missing data, n (%)', 'fr'), 'Missing data, n (%)', 'output dictionary rows are no longer translated');
 
 const docxStart = js.indexOf('const crcTable = (() =>');
