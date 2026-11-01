@@ -1200,9 +1200,9 @@ const done = (svg, d, desc, hasLegend = false) => ({ svg, w: d.outputW || d.W, h
 
 function buildFigureLegend(items, marker = 'circle') {
   const size = figTextSize('legend'), rowHeight = size + 8, xPad = 8, yPad = 7;
-  const labels = items.map(item => cut(String(item.label), Math.max(6, Math.floor(150 / (size * 0.62)))));
-  const textWidth = Math.max(0, ...labels.map(label => label.length * size * 0.62));
-  const width = Math.min(190, textWidth + 30), height = items.length * rowHeight + yPad * 2;
+  const labels = items.map(item => String(item.label));
+  const textWidth = Math.max(0, ...labels.map(label => label.length * size * 0.72));
+  const width = Math.ceil(textWidth + 34), height = items.length * rowHeight + yPad * 2;
   const rows = items.map((item, i) => {
     const baseline = yPad + size + i * rowHeight;
     const swatch = marker === 'box'
