@@ -62,6 +62,8 @@ const idNotices = [
 assert.deepEqual(JSON.parse(JSON.stringify(identifierFilterApi.filterIdentifierNotesAfterNoPatientId(idNotices, true))), ['“Age” has 20% missing values.'], 'No patient ID suppresses only the two possible-identifier notes');
 assert.deepEqual(JSON.parse(JSON.stringify(identifierFilterApi.filterIdentifierNotesAfterNoPatientId(idNotices, false))), idNotices, 'other patient-ID choices leave all notes unchanged');
 assert.match(html, /id="t1"/, 'Table 1 is present');
+assert.match(html, /<summary>Summary of missing data<\/summary>/, 'missing-data summary is a third section');
+assert.match(rawHtml, /id="missingSummary" data-output/, 'missing-data summary table is present');
 assert.match(rawHtml, /<!-- Table 1 Copy action temporarily disabled; retained for future use\.[\s\S]*?id="t1copy"[\s\S]*?-->/, 'Table 1 Copy button remains commented out');
 assert.doesNotMatch(html, /<button[^>]*id="t1copy"/, 'Table 1 Copy button is not active');
 assert.match(html, /class="btn primary" id="t1csv"/, 'Table 1 CSV download has primary styling');
@@ -108,7 +110,8 @@ const outputBlocks = [
   blockBetween(js, 'function renderTable(', '\n// Make the scope'),
   blockBetween(js, 'const tableRows =', '\nconst csvCell'),
   blockBetween(js, 'function showDetail(', '\nfunction drawBoxPlot('),
-  blockBetween(js, 'function buildTable1()', '\nfunction renderT1('),
+  blockBetween(js, 'function buildTable1()', '\nfunction buildMissingDataTable()'),
+  blockBetween(js, 'function buildMissingDataTable()', '\nfunction renderMissingDataTable()'),
   blockBetween(js, 'const t1Matrix =', '\nfunction initExtra('),
   blockBetween(js, 'function summaryDocx()', '\nfunction table1Docx('),
   blockBetween(js, 'function table1Docx()', '\nfunction buildPdf('),
@@ -126,7 +129,7 @@ assert.doesNotMatch(js.replace(chromeCountBlock, ''), /toLocaleString\(window\.A
 assert.doesNotMatch(js, /new Intl\.NumberFormat\(window\.AppI18n/, 'Intl output formatting does not read AppI18n');
 assert.match(js, /localeCompare\([^,]+, 'en', \{ numeric: true \}\)/, 'output sorting uses fixed English collation');
 
-const outputIds = ['stats', 't1', 't1notes', 'types', 'preview', 'figplot', 'figdesc', 'dbody'];
+const outputIds = ['stats', 't1', 't1notes', 'missingSummary', 'types', 'preview', 'figplot', 'figdesc', 'dbody'];
 for (const id of outputIds) assert.match(rawHtml, new RegExp(`id="${id}"[^>]*data-output|data-output[^>]*id="${id}"`), `#${id} is marked as output`);
 assert.match(rawHtml, /<caption[^>]*data-output/, 'output captions are marked');
 assert.match(rawHtml, /class="tablewrap" data-output[^>]*aria-label="Scrollable summary statistics table"/, 'output table aria label is protected');
@@ -158,7 +161,7 @@ const localeSnapshots = vm.runInContext(`(() => {
   const localeMap = { en: 'en-US', fr: 'fr-FR', es: 'es-ES', ru: 'ru-RU', ar: 'ar-EG' };
   return ['en','fr','es','ru','ar'].map(language => {
     window.AppI18n = { language, locale: localeMap[language], text: value => 'localized:' + value, markup: value => 'localized:' + value };
-    const table1 = buildTable1(), summary = tableRows(), matrix = t1Matrix();
+    const table1 = buildTable1(), missingSummary = buildMissingDataTable(), summary = tableRows(), matrix = t1Matrix();
     const figures = [
       figHist({ x: state.results[0].name, bins: 0 }),
       figBox({ x: state.results[0].name, g: state.t1.group }),
@@ -166,7 +169,7 @@ const localeSnapshots = vm.runInContext(`(() => {
       figScatter({ x: state.results[0].name, y: state.results[1].name, g: state.t1.group })
     ];
     const csv = rows => rows.map(row => row.map(csvCell).join(',')).join('\\r\\n');
-    return JSON.stringify({ summary, table1, matrix, figures, summaryCsv: csv(summary), table1Csv: csv(matrix),
+    return JSON.stringify({ summary, table1, missingSummary, matrix, figures, summaryCsv: csv(summary), table1Csv: csv(matrix),
       summaryTsv: summary.map(row => row.map(tsvCell).join('\\t')).join('\\r\\n'),
       summaryDocx: Array.from(summaryDocx()), table1Docx: Array.from(table1Docx()) });
   });

@@ -1010,7 +1010,6 @@ function buildTable1() {
         const v = s.idx.map(i => c.nums[i]).filter(x => x !== null);
         return v.length ? fmtSummary(computeStats(v), method, d) : '—'; }), ...(includeTests ? [p(test)] : [])]);
       pvalueInfo.push(test ? pTitle(test) : '');
-      rows.push(['  Non-missing n', ...sets.map(s => outCount(s.idx.filter(i => c.nums[i] !== null).length)), ...(includeTests ? [''] : [])]); pvalueInfo.push('');
     } else {
       const mode = state.t1.catChoices[c.name] === 'counts' || state.t1.catChoices[c.name] === 'percentage' || state.t1.catChoices[c.name] === 'counts_percentage' ? state.t1.catChoices[c.name] : 'counts_percentage';
       const label = mode === 'counts' ? 'counts' : mode === 'percentage' ? 'percentage' : 'counts (percentage)';
@@ -1021,19 +1020,47 @@ function buildTable1() {
       const lv = [...c.freq].sort((a, b) => b[1] - a[1] || nat(a[0], b[0]));
       if (lv.length > CONFIG.T1_MAX_LEVELS) { capped++; rows.push([`  ${lv.length} levels (not listed)`, ...sets.map(() => ''), ...(includeTests ? [''] : [])]); pvalueInfo.push(''); }
       else lv.forEach(([k]) => { rows.push([`  ${k}`, ...cnt.map(x => { const n = x.m.get(k) || 0, pct = x.den ? localFixed(100 * n / x.den, 1) + '%' : '—'; return mode === 'counts' ? outCount(n) : mode === 'percentage' ? pct : x.den ? `${outCount(n)} (${pct})` : '—'; }), ...(includeTests ? [''] : [])]); rawRowIndices.add(rows.length - 1); pvalueInfo.push(''); });
-      rows.push(['  Non-missing n', ...cnt.map(x => outCount(x.den)), ...(includeTests ? [''] : [])]); pvalueInfo.push('');
-    }
-    const col = c.type === 'numeric' ? c.nums : c.labels;
-    const ms = sets.map(s => s.idx.reduce((k, i) => k + (col[i] === null ? 1 : 0), 0));
-    if (ms.some(Boolean)) {
-      const missingCells = ms.map((n, i) => `${outCount(n)} (${localFixed(sets[i].idx.length ? 100 * n / sets[i].idx.length : 0, 1)}%)`);
-      rows.push(['  Missing data, n (%)', ...missingCells, ...(includeTests ? [''] : [])]); pvalueInfo.push('');
     }
   }
   if (g) notes.push(includeTests ? `Exploratory, unadjusted p-values compare complete observations across ${comparisonSets.length} non-missing groups; missing group labels are excluded from tests. They are not a measure of baseline balance or clinical importance, and no multiplicity adjustment is applied. Continuous summaries use ${state.t1.testMode === 'nonparametric' ? 'median (IQR)' : 'mean (SD)'}; Welch tests compare means, while Mann–Whitney/Kruskal–Wallis test rank distributions and do not specifically test medians. Categorical variables use one overall association test. Pearson chi-square requires no expected count below 1 and at least 80% of expected counts ≥5; sparse tables use exact tests when feasible. Hover or focus a p-value for the test and any limitation.` : 'Grouped summaries are descriptive. P-values are hidden by default; enable “Show exploratory p-values” only when an unadjusted group comparison is appropriate. These tests do not measure baseline balance or clinical importance.');
   else notes.push('Continuous: mean (SD) or median (IQR) as selected under Summary (Auto is a heuristic, not a normality test). Categorical: counts, percentages of non-missing values, or both as selected under Summary settings (Auto defaults to counts and percentages). Statistics use available observations; missing values are never treated as zero. Non-numeric entries in numeric variables are counted as missing.');
   if (capped) notes.push(`${capped} categorical variable(s) with more than ${CONFIG.T1_MAX_LEVELS} levels are not listed in this table.`);
   return { header: ['Characteristic', ...sets.map(s => s.label), ...(includeTests ? ['Exploratory p-value'] : [])], rows, notes, pvalueInfo, rawRowIndices };
+}
+
+function buildMissingDataTable() {
+  const all = [...Array(state.rows.length).keys()], g = state.categorical.find(c => c.name === state.t1.group);
+  const nat = (a, b) => a.localeCompare(b, 'en', { numeric: true });
+  const sets = [];
+  if (!g || state.t1.overall) sets.push({ label: 'Overall', idx: all });
+  if (g) {
+    [...g.freq.keys()].sort(nat).forEach(level => sets.push({ label: level, idx: all.filter(i => g.labels[i] === level) }));
+    const missingGroup = all.filter(i => g.labels[i] === null);
+    if (missingGroup.length) sets.push({ label: 'Missing group', idx: missingGroup });
+  }
+  const rows = [['N', ...sets.map(set => outCount(set.idx.length))]];
+  for (const c of state.cols) {
+    if (c.type === 'excluded' || state.t1.skip.has(c.name) || !state.t1.selected.has(c.name) || c === g) continue;
+    const values = c.type === 'numeric' ? c.nums : c.labels;
+    const counts = sets.map(set => {
+      const missing = set.idx.reduce((count, index) => count + (values[index] === null ? 1 : 0), 0);
+      const total = set.idx.length;
+      return { missing, nonMissing: total - missing, total };
+    });
+    rows.push([displayVariableName(c.name), ...sets.map(() => '')]);
+    rows.push(['  Non-missing n', ...counts.map(x => outCount(x.nonMissing))]);
+    rows.push(['  Missing data, n (%)', ...counts.map(x => `${outCount(x.missing)} (${localFixed(x.total ? 100 * x.missing / x.total : 0, 1)}%)`)]);
+  }
+  return { header: ['Characteristic', ...sets.map(set => set.label)], rows };
+}
+
+function renderMissingDataTable() {
+  const table = buildMissingDataTable();
+  const groupLevels = new Set(state.categorical.find(c => c.name === state.t1.group)?.freq.keys() || []);
+  $('missingSummary').innerHTML = `<thead><tr>${table.header.map((label, index) => `<th scope="col"${index ? ' class="num"' : ''}${groupLevels.has(label) ? ' data-raw' : ''}>${esc(label)}</th>`).join('')}</tr></thead><tbody>${table.rows.map(row => `<tr>${row.map((value, index) => {
+    const labelRow = row.length && row[0] !== 'N' && !String(row[0]).startsWith('  ');
+    return `<td class="${index ? 'num' : String(row[0]).startsWith('  ') ? 'ind' : ''}"${labelRow && index === 0 ? ' data-raw' : ''}>${esc(value)}</td>`;
+  }).join('')}</tr>`).join('')}</tbody>`;
 }
 
 function renderT1() {
@@ -1048,6 +1075,7 @@ function renderT1() {
   $('t1').innerHTML = `<thead><tr>${t.header.map((h, i) => `<th scope="col"${i ? ' class="num"' : ''}${groupLevels.has(h) ? ' data-raw' : ''}>${esc(h)}</th>`).join('')}</tr></thead><tbody>${
     t.rows.map((r, ri) => `<tr>${r.map((v, i) => { const rawLevel = i === 0 && r[0].startsWith('  ') && !['Missing', 'Non-missing n', 'Missing data, n (%)'].includes(r[0].trim()); return `<td class="${i ? 'num' : r[0].startsWith('  ') ? 'ind' : ''}"${rawLevel ? ' data-raw' : ''}${hasP && i === pIndex && t.pvalueInfo[ri] ? ` title="${esc(t.pvalueInfo[ri])}" tabindex="0"` : ''}>${esc(v.trim())}</td>`; }).join('')}</tr>`).join('')}</tbody>`;
   $('t1notes').innerHTML = t.notes.map(x => `<li>${esc(x)}</li>`).join('');
+  renderMissingDataTable();
 }
 const t1Matrix = () => { const t = buildTable1(); return [t.header.map(safe), ...t.rows.map(r => [safe(r[0]), ...r.slice(1)]), [''], ...t.notes.map(x => [x])]; };
 
