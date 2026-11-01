@@ -1150,9 +1150,18 @@ const FIGS = {
   box: { name: 'Box plot', info: 'Median, IQR, Tukey outliers; optional groups', needs: 'Numeric + optional categorical', icon: '<path d="M6 8h12v8H6zM12 8V3M12 16v5M6 12h12"/>' },
   bar: { name: 'Bar chart', info: 'Category counts or percentages', needs: 'Categorical', icon: '<path d="M4 6h12M4 12h16M4 18h8"/>' },
   scatter: { name: 'Scatter plot', info: 'Two numeric variables', needs: 'Two numeric + optional categorical', icon: '<circle cx="6" cy="17" r="1.5"/><circle cx="11" cy="11" r="1.5"/><circle cx="17" cy="14" r="1.5"/><circle cx="19" cy="6" r="1.5"/>' },
+  /* Missingness chart temporarily disabled; restore this entry when the plot returns:
   miss: { name: 'Missingness', info: 'Missing values per variable', needs: 'All variables', icon: '<path d="M4 5h16M4 10h10M4 15h6M4 20h13"/>' }
+  */
 };
-const FIG_TEXT_DEFAULTS = Object.freeze({ title: 15, axis: 12, tick: 11, legend: 11, value: 11 });
+const FIG_GROUPS = [
+  { name: 'Distributions', types: ['hist', 'box'] },
+  { name: 'Comparisons and relationships', types: ['bar', 'scatter'] },
+  /* Missingness chart category temporarily disabled; restore when the plot returns:
+  { name: 'Data quality', types: ['miss'] }
+  */
+];
+const FIG_TEXT_DEFAULTS = Object.freeze({ title: 18, axis: 14, tick: 12, legend: 12, value: 12 });
 function ensureFigureTextSizes(fig) {
   fig.textSizes ||= { ...FIG_TEXT_DEFAULTS };
   for (const [key, value] of Object.entries(FIG_TEXT_DEFAULTS)) if (!Number.isFinite(Number(fig.textSizes[key]))) fig.textSizes[key] = value;
@@ -1187,7 +1196,7 @@ function frame(d, inner, title, xl, yl, legend = null) {
   const legendSvg = legend ? `<g transform="translate(${d.W + 16} 34)">${legend.svg}</g>` : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${outputW} ${d.H}" width="${outputW}" height="${d.H}" font-family="system-ui, Arial, sans-serif" role="img" aria-label="${esc(title)}"><title>${esc(title)}</title><rect width="${outputW}" height="${d.H}" fill="#fff"/><text x="${d.W / 2}" y="${Math.max(22, figTextSize('title') + 6)}" text-anchor="middle" font-size="${figTextSize('title')}" font-weight="600" fill="#1d2430">${esc(title)}</text>${inner}${legendSvg}${T((d.l + d.W - d.r) / 2, d.H - 10, xl, 'middle', '#1d2430', figTextSize('axis'))}${yl ? `<text transform="translate(16 ${(d.t + d.H - d.b) / 2}) rotate(-90)" text-anchor="middle" font-size="${figTextSize('axis')}" fill="#1d2430">${esc(yl)}</text>` : ''}</svg>`;
 }
-const need = kind => ({ msg: (kind === 'cat' ? state.categorical : state.results).length ? 'Choose a variable.' : (kind === 'cat' ? 'No categorical variables were detected. Try a histogram, box plot or the missingness plot.' : 'No numeric variables were detected. Try a bar chart or the missingness plot.') });
+const need = kind => ({ msg: (kind === 'cat' ? state.categorical : state.results).length ? 'Choose a variable.' : (kind === 'cat' ? 'No categorical variables were detected. Try a histogram or box plot.' : 'No numeric variables were detected. Try a bar chart.') });
 const done = (svg, d, desc, hasLegend = false) => ({ svg, w: d.outputW || d.W, h: d.H, desc, hasLegend });
 
 function buildFigureLegend(items, marker = 'circle') {
@@ -1251,6 +1260,7 @@ function figBar(f) {
     `Bar chart of ${displayVariableName(c.name)}: ${c.nonMissing} non-missing observations; ${c.missing} missing excluded from percentages.${hid ? ` Showing the 15 most frequent of ${lv.length} levels; ${hid} not shown.` : ''}`);
 }
 
+/* Missingness plot temporarily disabled; retain its implementation for future use.
 function figMiss() {
   const n = state.rows.length;
   const items = state.cols.filter(c => (c.type !== 'excluded' || c.empty) && c.name !== state.patientId).map(c => [displayVariableName(c.name), c.missing]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'en', { numeric: true }));
@@ -1259,6 +1269,7 @@ function figMiss() {
   return done(frame(d, xAx(d, sx, [0, 25, 50, 75, 100]) + bars, 'Missing values by variable', `Percent of ${n} rows missing`, ''), d,
     `Missingness for ${items.length} analyzed variables (${n} rows), sorted by percent missing. Numeric columns also count non-numeric entries as missing. Missing = blank, NA, N/A, NaN, null, missing, "." or "-".`);
 }
+*/
 
 function figScatter(f) {
   const X = numVar(f.x), Y = numVar(f.y); if (!X || !Y) return need('num');
@@ -1278,21 +1289,27 @@ function figScatter(f) {
 function figRefresh() {
   const num = state.results.map(r => r.name), cat = state.categorical.map(r => r.name);
   const f = state.fig || (state.fig = { type: 'hist', x: '', y: '', c: '', g: '', bins: 0, mode: 'count' });
+  if (!FIGS[f.type]) f.type = 'hist';
   ensureFigureTextSizes(f); syncFigureTextControls();
   if (!num.includes(f.x)) f.x = num[0] || '';
   if (!num.includes(f.y)) f.y = num[1] || num[0] || '';
   if (!cat.includes(f.c)) f.c = cat[0] || '';
   if (f.g && !cat.includes(f.g)) f.g = '';
-  $('figtypes').innerHTML = Object.entries(FIGS).map(([k, v]) => `<button type="button" class="figtype" data-fig="${k}" aria-pressed="${f.type === k}"><svg viewBox="0 0 24 24" aria-hidden="true">${v.icon}</svg><strong>${v.name}</strong><span>${v.info}</span><!-- <em>${v.needs}</em> --></button>`).join('');
   const tx = value => window.AppI18n?.text(value) ?? value;
-  const S = (id, label, list, val, none) => `<label for="fig${id}">${tx(label)}</label><select id="fig${id}" class="method" data-f="${id}">${none ? `<option value="">${tx('None')}</option>` : ''}${list.map(n => `<option data-raw value="${esc(n)}"${n === val ? ' selected' : ''}>${esc(displayVariableName(n))}</option>`).join('')}</select>`;
+  const figureCards = FIG_GROUPS.map((group, groupIndex) => `<section class="figtype-category" aria-labelledby="figCategory-${groupIndex}"><h4 id="figCategory-${groupIndex}">${tx(group.name)}</h4><div class="figtype-options" role="group" aria-label="${esc(tx(group.name))}">${group.types.map(k => {
+    const v = FIGS[k];
+    return `<button type="button" class="figtype" data-fig="${k}" aria-pressed="${f.type === k}"><svg viewBox="0 0 24 24" aria-hidden="true">${v.icon}</svg><strong>${tx(v.name)}</strong><!-- Figure description retained for future use: <span>${tx(v.info)}</span> --></button>`;
+  }).join('')}</div></section>`).join('');
+  $('figtypes').innerHTML = figureCards;
+  $('figureDataStep').hidden = false;
+  const S = (id, label, list, val, none) => `<label class="fig-field" for="fig${id}"><span>${tx(label)}</span><select id="fig${id}" class="method" data-f="${id}">${none ? `<option value="">${tx('None')}</option>` : ''}${list.length ? list.map(n => `<option data-raw value="${esc(n)}"${n === val ? ' selected' : ''}>${esc(displayVariableName(n))}</option>`).join('') : !none ? `<option value="">${tx('Choose a variable.')}</option>` : ''}</select></label>`;
   $('figctl').innerHTML = { hist: () => S('x', 'Variable', num, f.x) /* + `<label for="figbins">Bins</label><input id="figbins" data-f="bins" type="number" min="1" max="100" value="${f.bins || ''}">` */, 
-    box: () => S('x', 'Variable', num, f.x) + S('g', 'Group by', cat, f.g, true), bar: () => S('c', 'Variable', cat, f.c) + `<label for="figmode">Show</label><select id="figmode" class="method" data-f="mode"><option value="count"${f.mode === 'count' ? ' selected' : ''}>Counts</option><option value="pct"${f.mode === 'pct' ? ' selected' : ''}>Percent</option></select>`,
-    miss: () => '', scatter: () => S('x', 'X', num, f.x) + S('y', 'Y', num, f.y) + S('g', 'Color by', cat, f.g, true) }[f.type]();
+    box: () => S('x', 'Variable', num, f.x) + S('g', 'Group by', cat, f.g, true), bar: () => S('c', 'Variable', cat, f.c) + `<label class="fig-field" for="figmode"><span>${tx('Show')}</span><select id="figmode" class="method" data-f="mode"><option value="count"${f.mode === 'count' ? ' selected' : ''}>${tx('Counts')}</option><option value="pct"${f.mode === 'pct' ? ' selected' : ''}>${tx('Percent')}</option></select></label>`,
+    scatter: () => S('x', 'X', num, f.x) + S('y', 'Y', num, f.y) + S('g', 'Color by', cat, f.g, true) }[f.type]();
   if (state.view === 'figures') figDraw();
 }
 function figDraw() {
-  const f = state.fig, out = { hist: figHist, box: figBox, bar: figBar, miss: figMiss, scatter: figScatter }[f.type](f);
+  const f = state.fig, out = { hist: figHist, box: figBox, bar: figBar, scatter: figScatter }[f.type](f);
   const svg = out.svg || '';
   figCur = out.svg ? { ...out, svg } : null;
   const legendControl = $('figFontLegend'), legendField = legendControl.closest('.fig-text-control'), legendEnabled = Boolean(figCur?.hasLegend);

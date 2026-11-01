@@ -111,7 +111,19 @@ assert.match(css, /\.menupanel\{position:absolute;left:0;right:auto/, 'dropdown 
 assert.match(css, /#exportMenu>\.menupanel\{left:auto;right:0\}/, 'Export menu aligns its right edge with its trigger');
 assert.match(css, /prefers-reduced-motion:\s*reduce/, 'reduced-motion preference is respected');
 assert.match(css, /\.note\{font-size:\.875rem/, 'helper text uses a readable 14px minimum');
-assert.match(css, /\.figtype span\{color:var\(--mute\);font-size:1\.28rem/, 'figure descriptions use the current readable card size');
+assert.match(html, /id="figureChoiceHeading"[\s\S]*?id="figtypes"/, 'figures has a choose-visualization step');
+assert.match(html, /id="figureDataStep"[\s\S]*?id="figureDataHeading"/, 'figures has a configure-data step');
+assert.match(html, /id="figureExportMenu"[\s\S]*?id="figsvg"[\s\S]*?id="figpng"[\s\S]*?id="figpdf"[\s\S]*?id="figreset"/, 'SVG, PNG, PDF, and reset actions remain available');
+assert.match(rawHtml, /<!-- Figures overview temporarily disabled[\s\S]*?Explore distributions, relationships, and missing data\.[\s\S]*?-->/, 'redundant Figures overview remains commented out');
+assert.match(rawHtml, /<!-- Figure text help temporarily disabled[\s\S]*?Adjust text sizes for this figure\.[\s\S]*?-->/, 'slider help paragraph remains commented out');
+assert.match(js, /Figure description retained for future use:[\s\S]*?v\.info/, 'figure card descriptions remain in HTML comments, not visible copy');
+assert.match(css, /\.figtype-options\{display:grid/, 'figure types use grouped, compact cards');
+assert.match(css, /\.figure-controls\{display:grid/, 'chart-specific settings use a consistent grid');
+assert.match(css, /@media\(max-width:760px\)\{\.figtypes\{grid-template-columns:minmax\(0,1fr\)/, 'figure categories stack on small screens');
+assert.doesNotMatch(html, /data-fig="miss"|Missingness/, 'missingness is not exposed as an active figure');
+assert.match(js, /\/\* Missingness chart temporarily disabled[\s\S]*?name: 'Missingness'[\s\S]*?\*\//, 'missingness figure choice is retained in comments');
+assert.match(js, /\/\* Missingness plot temporarily disabled[\s\S]*?function figMiss\(\)[\s\S]*?\*\//, 'missingness plot renderer is retained in comments');
+assert.doesNotMatch(js.replace(/\/\*[\s\S]*?\*\//g, ''), /miss:\s*figMiss|types:\s*\['miss'\]/, 'missingness is not connected to the active chart renderer or selector');
 
 const blockBetween = (source, startMarker, endMarker) => {
   const start = source.indexOf(startMarker);
@@ -158,7 +170,12 @@ assert.match(locales, /for \(const key of outputOnlyKeys\) arabic\.delete\(key\)
 
 const runtimeSource = js.replace(/\ninit\(\); initExtra\(\);\s*$/, '\n');
 assert.notEqual(runtimeSource, js, 'runtime builders can be loaded without attaching browser event handlers');
-const outputContext = vm.createContext({ TextEncoder, window: { AppI18n: null }, document: {} });
+const figureNodes = new Map();
+const outputDocument = {
+  getElementById(id) { if (!figureNodes.has(id)) figureNodes.set(id, {}); return figureNodes.get(id); },
+  querySelectorAll() { return []; }
+};
+const outputContext = vm.createContext({ TextEncoder, window: { AppI18n: null }, document: outputDocument });
 vm.runInContext(runtimeSource, outputContext, { filename: 'main.js' });
 const localeSnapshots = vm.runInContext(`(() => {
   const parsed = parseCSV(sampleCSV());
@@ -179,16 +196,35 @@ const localeSnapshots = vm.runInContext(`(() => {
     const figures = [
       figHist({ x: state.results[0].name, bins: 0 }),
       figBox({ x: state.results[0].name, g: state.t1.group }),
-      figBar({ c: state.t1.group, mode: 'count' }), figMiss(),
+      figBar({ c: state.t1.group, mode: 'count' }),
       figScatter({ x: state.results[0].name, y: state.results[1].name, g: state.t1.group })
     ];
+    const figureConfigViews = ['hist','box','bar','scatter'].map(type => {
+      state.fig = { type, x: state.results[0].name, y: state.results[1].name, c: state.t1.group, g: state.t1.group, mode: 'count' };
+      figRefresh();
+      return { type, controls: document.getElementById('figctl').innerHTML, configHidden: document.getElementById('figureDataStep').hidden };
+    });
+    const figureTypeCards = document.getElementById('figtypes').innerHTML;
     const csv = rows => rows.map(row => row.map(csvCell).join(',')).join('\\r\\n');
-    return JSON.stringify({ summary, table1, missingSummary, matrix, figures, summaryCsv: csv(summary), table1Csv: csv(matrix),
+    return JSON.stringify({ summary, table1, missingSummary, matrix, figures, figureConfigViews, figureTypeCards, summaryCsv: csv(summary), table1Csv: csv(matrix),
       summaryTsv: summary.map(row => row.map(tsvCell).join('\\t')).join('\\r\\n'),
       summaryDocx: Array.from(summaryDocx()), table1Docx: Array.from(table1Docx()) });
   });
 })()`, outputContext);
 assert.equal(new Set(localeSnapshots).size, 1, 'table rows, Table 1 notes, all figure SVG/descriptions, and exports are byte-identical in all five languages');
+const figureSnapshot = JSON.parse(localeSnapshots[0]);
+const expectedFigureControls = { hist: ['figx'], box: ['figx', 'figg'], bar: ['figc', 'figmode'], scatter: ['figx', 'figy', 'figg'] };
+for (const view of figureSnapshot.figureConfigViews) {
+  for (const id of expectedFigureControls[view.type]) assert.match(view.controls, new RegExp(`id="${id}"`), `${view.type} exposes its supported control #${id}`);
+  assert.equal(view.configHidden, false, `${view.type} shows only relevant data controls`);
+}
+assert.match(figureSnapshot.figureTypeCards, /localized:Distributions[\s\S]*localized:Histogram[\s\S]*localized:Box plot/);
+assert.match(figureSnapshot.figureTypeCards, /localized:Comparisons and relationships[\s\S]*localized:Bar chart[\s\S]*localized:Scatter plot/);
+assert.doesNotMatch(figureSnapshot.figureTypeCards, /Missingness|Data quality/);
+assert.match(js, /const v = e\.target\.closest\('\[data-view\]'\), t = e\.target\.closest\('\[data-fig\]'\)/, 'figure type cards remain selectable');
+assert.match(js, /\$\('figTextControls'\)\.addEventListener\('input'/, 'figure text sliders update the live preview');
+assert.match(js, /\$\('figreset'\)\.addEventListener\('click'/, 'figure reset remains wired');
+for (const id of ['figsvg', 'figpng', 'figpdf']) assert.match(js, new RegExp(`\\$\\('${id}'\\)\\.addEventListener\\('click'`), `${id} remains wired`);
 const localeContext = vm.createContext({ window: {}, document: { addEventListener() {} } });
 vm.runInContext(locales, localeContext, { filename: 'locales.js' });
 for (const [language, expected] of Object.entries({ en: 'Upload', fr: 'Importation', es: 'Carga de datos', ru: 'Загрузка данных', ar: 'رفع ملف' })) {

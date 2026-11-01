@@ -60,6 +60,14 @@
     ['Table configuration','Configuration du tableau','Configuración de la tabla','Настройка таблицы']
   );
   rows.push(
+    ['Choose visualization','Choisir une visualisation','Elegir visualización','Выбрать визуализацию'],
+    ['Configure data','Configurer les données','Configurar datos','Настроить данные'],
+    ['Distributions','Distributions','Distribuciones','Распределения'],
+    ['Comparisons and relationships','Comparaisons et relations','Comparaciones y relaciones','Сравнения и взаимосвязи'],
+    ['Data quality','Qualité des données','Calidad de los datos','Качество данных'],
+    ['Figure details','Détails de la figure','Detalles de la figura','Сведения о рисунке']
+  );
+  rows.push(
     ['Confirm data de-identification','Confirmer la dé-identification des données','Confirme la desidentificación de los datos','Подтвердите обезличивание данных'],
     ['Before this file is processed, confirm that it contains only de-identified information and no patient names, dates of birth, medical record numbers, contact information, or other direct identifiers. You are responsible for ensuring that you are authorized to use and upload this data.','Avant le traitement de ce fichier, confirmez qu’il ne contient que des données dé-identifiées, sans nom de patient, date de naissance, numéro de dossier médical, coordonnées ni autre identifiant direct. Il vous appartient de vérifier que vous êtes autorisé à utiliser et à importer ces données.','Antes de procesar este archivo, confirme que solo contiene datos desidentificados y que no incluye nombres de pacientes, fechas de nacimiento, números de historia clínica, datos de contacto ni otros identificadores directos. Usted es responsable de comprobar que tiene autorización para usar y subir estos datos.','Перед обработкой этого файла подтвердите, что он содержит только обезличенные данные и не содержит имен пациентов, дат рождения, номеров медицинских карт, контактных данных или других прямых идентификаторов. Вы отвечаете за то, чтобы убедиться в наличии у вас разрешения на использование и загрузку этих данных.'],
     ['No, cancel upload','Non, annuler l’importation','No, cancelar la carga','Нет, отменить загрузку'],
@@ -121,6 +129,12 @@
   arabic.set('Categorical variables', 'المتغيرات الفئوية');
   arabic.set('Variable selection', 'اختيار المتغيرات');
   arabic.set('Table configuration', 'إعداد الجدول');
+  arabic.set('Choose visualization', 'اختيار التصور');
+  arabic.set('Configure data', 'إعداد البيانات');
+  arabic.set('Distributions', 'التوزيعات');
+  arabic.set('Comparisons and relationships', 'المقارنات والعلاقات');
+  arabic.set('Data quality', 'جودة البيانات');
+  arabic.set('Figure details', 'تفاصيل الشكل');
   for (const key of outputOnlyKeys) arabic.delete(key);
   for (const [en, ar] of arabic) { dict.ar.set(en, ar); reverse.set(ar, en); }
   const localeTag = { en: 'en-US', fr: 'fr-FR', es: 'es-ES', ru: 'ru-RU', ar: 'en-US' };
