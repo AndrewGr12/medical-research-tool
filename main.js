@@ -1253,8 +1253,8 @@ function figBox(f) {
 function figBar(f) {
   const c = catVar(f.c); if (!c) return need('cat');
   const lv = byFreq(c), shown = lv.slice(0, 15), hid = lv.length - shown.length, pct = f.mode === 'pct';
-  const d = { W: 640, H: 104 + 26 * shown.length, l: 140, r: Math.max(90, figTextSize('value') * 8), t: 40, b: 56 }, vals = shown.map(([, n]) => pct ? 100 * n / c.nonMissing : n), mx = Math.max(...vals), sx = lin(0, mx, d.l, d.W - d.r);
-  const bars = shown.map(([k, n], i) => { const y = d.t + 8 + i * 26, p = 100 * n / c.nonMissing; return T(d.l - 6, y + 14, cut(k, Math.max(8, Math.floor(220 / figTextSize('tick')))), 'end', '#1d2430', figTextSize('tick')) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(vals[i]) - d.l)}" height="20" fill="${PAL[0]}"/>` + T(sx(vals[i]) + 4, y + 14, `${outCount(n)} (${localFixed(p, 1)}%)`, 'start', '#1d2430', figTextSize('value')); }).join('');
+  const d = { W: 640, H: 112 + 26 * shown.length, l: 140, r: Math.max(90, figTextSize('value') * 8), t: 56, b: 56 }, vals = shown.map(([, n]) => pct ? 100 * n / c.nonMissing : n), mx = Math.max(...vals), sx = lin(0, mx, d.l, d.W - d.r);
+  const bars = shown.map(([k, n], i) => { const y = d.t + 2 + i * 26, p = 100 * n / c.nonMissing; return T(d.l - 6, y + 14, cut(k, Math.max(8, Math.floor(220 / figTextSize('tick')))), 'end', '#1d2430', figTextSize('tick')) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(vals[i]) - d.l)}" height="20" fill="${PAL[0]}"/>` + T(sx(vals[i]) + 4, y + 14, `${outCount(n)} (${localFixed(p, 1)}%)`, 'start', '#1d2430', figTextSize('value')); }).join('');
   return done(frame(d, xAx(d, sx, niceTicks(0, mx)) + bars, cut(displayVariableName(c.name), 60), pct ? `Percent of non-missing (n = ${c.nonMissing})` : 'Count', ''), d,
     `Bar chart of ${displayVariableName(c.name)}: ${c.nonMissing} non-missing observations; ${c.missing} missing excluded from percentages.${hid ? ` Showing the 15 most frequent of ${lv.length} levels; ${hid} not shown.` : ''}`);
 }
@@ -1313,7 +1313,7 @@ function figDraw() {
   figCur = out.svg ? { ...out, svg } : null;
   const legendControl = $('figFontLegend'), legendField = legendControl.closest('.fig-text-control'), legendEnabled = Boolean(figCur?.hasLegend);
   legendControl.disabled = !legendEnabled; legendControl.setAttribute('aria-disabled', String(!legendEnabled)); legendField.classList.toggle('is-disabled', !legendEnabled);
-  const p = $('figplot'); p.classList.toggle('has-legend', legendEnabled); p.innerHTML = svg || `<p class="note">${esc(out.msg)}</p>`;
+  const p = $('figplot'); p.classList.toggle('has-legend', legendEnabled); p.classList.toggle('is-bar-chart', f.type === 'bar'); p.innerHTML = svg || `<p class="note">${esc(out.msg)}</p>`;
   p.classList.remove('fade-soft'); void p.offsetWidth; p.classList.add('fade-soft');
   $('figdesc').textContent = out.desc || '';
   $('figsvg').disabled = $('figpng').disabled = $('figpdf').disabled = !figCur;

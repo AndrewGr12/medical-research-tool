@@ -220,6 +220,7 @@ td.ind{padding-left:28px}
 .fig-text-control output{font-size:.9rem}
 .fig-text-control input[type=range]{min-height:28px;touch-action:pan-x}
 .figwrap{min-height:380px;margin:0;padding:16px}
+.figwrap.is-bar-chart{min-height:0}
 .figwrap svg{margin:0 auto}
 .figure-details{margin:10px 0 4px;border-bottom:1px solid var(--line)}
 .figure-details>summary{padding:7px 2px;color:var(--mute);font-size:.9rem;cursor:pointer}

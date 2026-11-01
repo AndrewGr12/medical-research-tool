@@ -119,6 +119,8 @@ assert.match(rawHtml, /<!-- Figure text help temporarily disabled[\s\S]*?Adjust 
 assert.match(js, /Figure description retained for future use:[\s\S]*?v\.info/, 'figure card descriptions remain in HTML comments, not visible copy');
 assert.match(css, /\.figtype-options\{display:grid/, 'figure types use grouped, compact cards');
 assert.match(css, /\.figure-controls\{display:grid/, 'chart-specific settings use a consistent grid');
+assert.match(css, /\.figwrap\.is-bar-chart\{min-height:0\}/, 'bar-chart preview grows with its SVG instead of leaving a tall empty wrapper');
+assert.match(js, /H: 112 \+ 26 \* shown\.length[\s\S]*?t: 56, b: 56/, 'bar-chart frame uses equal fixed plot margins and grows by one row height per category');
 assert.match(css, /@media\(max-width:760px\)\{\.figtypes\{grid-template-columns:minmax\(0,1fr\)/, 'figure categories stack on small screens');
 assert.doesNotMatch(html, /data-fig="miss"|Missingness/, 'missingness is not exposed as an active figure');
 assert.match(js, /\/\* Missingness chart temporarily disabled[\s\S]*?name: 'Missingness'[\s\S]*?\*\//, 'missingness figure choice is retained in comments');
@@ -206,13 +208,14 @@ const localeSnapshots = vm.runInContext(`(() => {
     });
     const figureTypeCards = document.getElementById('figtypes').innerHTML;
     const csv = rows => rows.map(row => row.map(csvCell).join(',')).join('\\r\\n');
-    return JSON.stringify({ summary, table1, missingSummary, matrix, figures, figureConfigViews, figureTypeCards, summaryCsv: csv(summary), table1Csv: csv(matrix),
+    return JSON.stringify({ summary, table1, missingSummary, matrix, figures, barFigureHeight: figures[2].h, barLevelCount: Math.min(15, state.categorical.find(c => c.name === state.t1.group).freq.size), figureConfigViews, figureTypeCards, summaryCsv: csv(summary), table1Csv: csv(matrix),
       summaryTsv: summary.map(row => row.map(tsvCell).join('\\t')).join('\\r\\n'),
       summaryDocx: Array.from(summaryDocx()), table1Docx: Array.from(table1Docx()) });
   });
 })()`, outputContext);
 assert.equal(new Set(localeSnapshots).size, 1, 'table rows, Table 1 notes, all figure SVG/descriptions, and exports are byte-identical in all five languages');
 const figureSnapshot = JSON.parse(localeSnapshots[0]);
+assert.equal(figureSnapshot.barFigureHeight, 112 + 26 * figureSnapshot.barLevelCount, 'bar chart height grows with its shown categories while keeping fixed top and bottom margins');
 const expectedFigureControls = { hist: ['figx'], box: ['figx', 'figg'], bar: ['figc', 'figmode'], scatter: ['figx', 'figy', 'figg'] };
 for (const view of figureSnapshot.figureConfigViews) {
   for (const id of expectedFigureControls[view.type]) assert.match(view.controls, new RegExp(`id="${id}"`), `${view.type} exposes its supported control #${id}`);
