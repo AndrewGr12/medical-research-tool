@@ -443,6 +443,14 @@ function updateScope(shown) {
   const n = state.results.length, c = state.categorical.length;
   $('scope').textContent = `Continuous settings apply to all ${n} numeric variable${n === 1 ? '' : 's'}; categorical settings apply to all ${c} categorical variable${c === 1 ? '' : 's'}.`;
   $('exportScope').textContent = '';
+  document.querySelectorAll('[data-setall]').forEach(button => {
+    const choice = button.dataset.setall;
+    button.setAttribute('aria-pressed', String(n > 0 && state.results.every(result => result.choice === choice)));
+  });
+  document.querySelectorAll('[data-cat-setall]').forEach(button => {
+    const choice = button.dataset.catSetall;
+    button.setAttribute('aria-pressed', String(c > 0 && state.categorical.every(variable => (state.t1.catChoices[variable.name] || 'auto') === choice)));
+  });
 }
 
 

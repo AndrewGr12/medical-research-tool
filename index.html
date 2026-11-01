@@ -65,10 +65,9 @@
     <div id="tables" hidden>
       <div class="back"><h2 data-h tabindex="-1">Tables</h2></div>
 
-    <section aria-labelledby="h-summary">
-      <h2 id="h-summary">Summary statistics</h2>
-      <div class="toolbar">
-        <span class="spacer"></span>
+    <section aria-labelledby="h-summary" class="summary-statistics-section">
+      <div class="tables-section-heading">
+        <h2 id="h-summary">Summary statistics</h2>
         <details class="menu" id="exportMenu">
           <summary class="btn primary">Export</summary>
           <div class="menupanel">
@@ -86,21 +85,29 @@
 
       <details class="settings">
         <summary>Summary settings</summary>
-        <div class="group" role="group" aria-label="Set summary method for all numeric variables">
-          <span class="grouplabel">Set all:</span>
-          <button type="button" class="btn" data-setall="auto">Auto</button>
-          <button type="button" class="btn" data-setall="Mean (SD)">Mean (SD)</button>
-          <button type="button" class="btn" data-setall="Median (IQR)">Median (IQR)</button>
+        <div class="summary-settings-grid">
+          <section class="summary-setting-group" aria-labelledby="continuousSettingsHeading">
+            <h3 class="control-group-title" id="continuousSettingsHeading">Continuous variables</h3>
+            <div class="group" role="group" aria-label="Set summary method for all numeric variables">
+              <span class="grouplabel">Set all:</span>
+              <button type="button" class="btn" data-setall="auto">Auto</button>
+              <button type="button" class="btn" data-setall="Mean (SD)">Mean (SD)</button>
+              <button type="button" class="btn" data-setall="Median (IQR)">Median (IQR)</button>
+            </div>
+            <p id="scope" class="note"></p>
+          </section>
+          <section class="summary-setting-group" aria-labelledby="categoricalSettingsHeading">
+            <h3 class="control-group-title" id="categoricalSettingsHeading">Categorical variables</h3>
+            <div class="group" role="group" aria-label="Categorical summary format for all variables">
+              <span class="grouplabel">Categorical set all:</span>
+              <button type="button" class="btn" data-cat-setall="auto">Auto</button>
+              <button type="button" class="btn" data-cat-setall="counts">Counts</button>
+              <button type="button" class="btn" data-cat-setall="percentage">Percentage</button>
+              <button type="button" class="btn" data-cat-setall="counts_percentage">Counts (percentage)</button>
+            </div>
+            <div id="catSettings" class="cat-settings" aria-label="Categorical variable summary settings"></div>
+          </section>
         </div>
-        <p id="scope" class="note"></p>
-        <div class="group" role="group" aria-label="Categorical summary format for all variables">
-          <span class="grouplabel">Categorical set all:</span>
-          <button type="button" class="btn" data-cat-setall="auto">Auto</button>
-          <button type="button" class="btn" data-cat-setall="counts">Counts</button>
-          <button type="button" class="btn" data-cat-setall="percentage">Percentage</button>
-          <button type="button" class="btn" data-cat-setall="counts_percentage">Counts (percentage)</button>
-        </div>
-        <div id="catSettings" class="cat-settings" aria-label="Categorical variable summary settings"></div>
       </details>
 
       <div class="tablewrap" data-output role="region" tabindex="0" aria-label="Scrollable summary statistics table">
@@ -125,24 +132,33 @@
 
     <details class="section" open>
       <summary>Summary table</summary>
-      <div class="t1ctl">
-        <span class="spacer"></span>
-        <details class="menu" id="t1variablesMenu">
-          <summary class="btn" id="t1variablesLabel">Select variables</summary>
-          <div class="menupanel t1-variable-panel">
-            <div class="t1-variable-actions"><button type="button" class="btn" id="t1selectAll">Select all</button><button type="button" class="btn" id="t1selectNone">Clear all</button></div>
-            <div id="t1variables" class="t1-variable-list" role="group" aria-label="Variables included in summary table"></div>
+      <div class="t1-control-layout">
+        <section class="t1-control-group variable-selection-group" role="group" aria-labelledby="variableSelectionHeading">
+          <h3 class="control-group-title" id="variableSelectionHeading">Variable selection</h3>
+          <details class="menu" id="t1variablesMenu">
+            <summary class="btn" id="t1variablesLabel">Select variables</summary>
+            <div class="menupanel t1-variable-panel">
+              <div class="t1-variable-actions"><button type="button" class="btn" id="t1selectAll">Select all</button><button type="button" class="btn" id="t1selectNone">Clear all</button></div>
+              <div id="t1variables" class="t1-variable-list" role="group" aria-label="Variables included in summary table"></div>
+            </div>
+          </details>
+        </section>
+        <section class="t1-control-group table-configuration-group" role="group" aria-labelledby="tableConfigurationHeading">
+          <h3 class="control-group-title" id="tableConfigurationHeading">Table configuration</h3>
+          <div class="t1-configuration-controls">
+            <label class="t1-select-control" for="t1group"><span>Group by</span><select id="t1group" class="method"></select></label>
+            <label class="t1-select-control" for="t1testMode"><span>Continuous comparison</span>
+              <select id="t1testMode" class="method" aria-label="Continuous comparison test mode">
+                <option value="parametric">Parametric (Welch)</option>
+                <option value="nonparametric">Nonparametric</option>
+              </select>
+            </label>
+            <label class="t1-check-control"><input type="checkbox" id="t1showPValues"> <span>Show exploratory p-values</span></label>
+            <label class="t1-check-control"><input type="checkbox" id="t1overall" checked> <span>Overall column</span></label>
           </div>
-        </details>
-        <label for="t1group">Group by</label><select id="t1group" class="method"></select>
-        <label for="t1testMode">Continuous comparison</label>
-        <select id="t1testMode" class="method" aria-label="Continuous comparison test mode">
-          <option value="parametric">Parametric (Welch)</option>
-          <option value="nonparametric">Nonparametric</option>
-        </select>
-        <label><input type="checkbox" id="t1showPValues"> Show exploratory p-values</label>
-        <label><input type="checkbox" id="t1overall" checked> Overall column</label>
-        <details class="menu" id="t1ExportMenu">
+        </section>
+        <section class="t1-control-group t1-export-group" role="group" aria-label="Export">
+          <details class="menu" id="t1ExportMenu">
           <summary class="btn primary">Export</summary>
           <div class="menupanel">
             <button type="button" class="btn" id="t1copy">Copy table</button>
@@ -150,7 +166,8 @@
             <button type="button" class="btn" id="t1tsv">Download TSV</button>
             <button type="button" class="btn" id="t1docx">Download Word (.docx)</button>
           </div>
-        </details>
+          </details>
+        </section>
       </div>
       <div class="tablewrap" data-output role="region" tabindex="0" aria-label="Scrollable summary table"><table id="t1" data-output><caption class="sr" data-output>Summary table</caption></table></div>
       <ul id="t1notes" class="note" data-output></ul>
@@ -158,7 +175,9 @@
 
     <details class="section" id="missingSummarySection" open>
       <summary>Summary of missing data</summary>
+      <!-- Missing-data table explanation temporarily disabled as redundant with the table headings:
       <p class="note">Non-missing counts and missing counts with percentages are shown separately from the summary table. Group columns follow the summary-table settings.</p>
+      -->
       <div class="toolbar">
         <span class="spacer"></span>
         <details class="menu" id="missingExportMenu">

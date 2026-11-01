@@ -64,17 +64,31 @@ assert.deepEqual(JSON.parse(JSON.stringify(identifierFilterApi.filterIdentifierN
 assert.match(html, /id="t1"/, 'Table 1 is present');
 assert.match(html, /<summary>Summary of missing data<\/summary>/, 'missing-data summary is a third section');
 assert.match(rawHtml, /id="missingSummary" data-output/, 'missing-data summary table is present');
-assert.match(rawHtml, /<!-- Table 1 Copy action temporarily disabled; retained for future use\.[\s\S]*?id="t1copy"[\s\S]*?-->/, 'Table 1 Copy button remains commented out');
-assert.doesNotMatch(html, /<button[^>]*id="t1copy"/, 'Table 1 Copy button is not active');
-assert.match(html, /class="btn primary" id="t1csv"/, 'Table 1 CSV download has primary styling');
-assert.match(html, /class="btn primary" id="t1docx"/, 'Table 1 Word download has primary styling');
+assert.match(html, /id="t1ExportMenu">[\s\S]*?id="t1copy"[\s\S]*?id="t1csv"[\s\S]*?id="t1tsv"[\s\S]*?id="t1docx"[\s\S]*?<\/details>/, 'summary table export menu has all four export options');
+assert.match(html, /id="missingExportMenu">[\s\S]*?id="missingCopy"[\s\S]*?id="missingCsv"[\s\S]*?id="missingTsv"[\s\S]*?id="missingDocx"[\s\S]*?<\/details>/, 'missing-data export menu has all four export options');
+assert.match(html, /id="continuousSettingsHeading"/, 'continuous-variable settings are grouped');
+assert.match(html, /id="categoricalSettingsHeading"/, 'categorical-variable settings are grouped');
+assert.match(html, /id="variableSelectionHeading"[\s\S]*?id="tableConfigurationHeading"[\s\S]*?aria-label="Export"/, 'summary-table controls are grouped by purpose');
+assert.match(rawHtml, /<!-- Summary statistics guidance temporarily disabled:/, 'redundant summary statistics guidance remains commented out');
+assert.match(rawHtml, /<!-- Missing-data table explanation temporarily disabled/, 'redundant missing-data explanation remains commented out');
 assert.match(html, /id="figtypes"/, 'figure workflow is present');
 assert.match(html, /id="warnings"[^>]*role="status"[^>]*aria-live="polite"/, 'dynamic data warnings are announced politely');
 assert.match(js, /addEventListener\('click',\s*\(\)\s*=>\s*loadText\(sampleCSV\(\)/, 'sample-data action has a handler');
 assert.match(js, /addEventListener\('click',\s*e\s*=>\s*\{[\s\S]*details\.menu\[open\]/, 'open menus close after outside clicks');
 assert.match(locales, /Transform your clinical data into tables and visualizations!/,'localized post-selection description source is present');
 assert.match(locales, /Some column names were blank or duplicated[\s\S]*?noms de colonnes étaient vides[\s\S]*?nombres de columna estaban vacíos[\s\S]*?названия столбцов были пустыми/, 'header-review warning is translated in all supported languages');
-assert.match(js, /Table 1 Copy action temporarily disabled; retained for future use\.[\s\S]*?t1copy[\s\S]*?\*\//, 'Table 1 Copy logic remains commented out');
+assert.match(js, /\$\('t1copy'\)\.addEventListener\('click'/, 'summary table copy remains active');
+assert.match(js, /\$\('missingCopy'\)\.addEventListener\('click'/, 'missing-data copy handler remains active');
+const controlLabels = {
+  'Continuous variables': ['Variables continues', 'Variables continuas', 'Непрерывные переменные', 'المتغيرات المستمرة'],
+  'Categorical variables': ['Variables catégorielles', 'Variables categóricas', 'Категориальные переменные', 'المتغيرات الفئوية'],
+  'Variable selection': ['Sélection des variables', 'Selección de variables', 'Выбор переменных', 'اختيار المتغيرات'],
+  'Table configuration': ['Configuration du tableau', 'Configuración de la tabla', 'Настройка таблицы', 'إعداد الجدول']
+};
+for (const [label, translations] of Object.entries(controlLabels)) {
+  assert.ok(locales.includes(label), `${label} has an English locale key`);
+  for (const translation of translations) assert.ok(locales.includes(translation), `${label} has a ${translation} translation`);
+}
 for (const locale of ['en', 'fr', 'es', 'ru']) assert.match(html, new RegExp(`data-locale="${locale}"`), `${locale} language button is present`);
 
 const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
