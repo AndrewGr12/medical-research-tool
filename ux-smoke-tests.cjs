@@ -218,9 +218,9 @@ for (const view of figureSnapshot.figureConfigViews) {
   for (const id of expectedFigureControls[view.type]) assert.match(view.controls, new RegExp(`id="${id}"`), `${view.type} exposes its supported control #${id}`);
   assert.equal(view.configHidden, false, `${view.type} shows only relevant data controls`);
 }
-assert.match(figureSnapshot.figureTypeCards, /localized:Distributions[\s\S]*localized:Histogram[\s\S]*localized:Box plot/);
-assert.match(figureSnapshot.figureTypeCards, /localized:Comparisons and relationships[\s\S]*localized:Bar chart[\s\S]*localized:Scatter plot/);
-assert.doesNotMatch(figureSnapshot.figureTypeCards, /Missingness|Data quality/);
+assert.match(figureSnapshot.figureTypeCards, /localized:Distributions[\s\S]*localized:Histogram[\s\S]*localized:Box plot[\s\S]*localized:Bar chart[\s\S]*localized:Scatter plot/);
+assert.equal((figureSnapshot.figureTypeCards.match(/class="figtype"/g) || []).length, 4, 'all four supported plots share one Distributions row');
+assert.doesNotMatch(figureSnapshot.figureTypeCards, /Missingness|Data quality|Comparisons and relationships/);
 assert.match(js, /const v = e\.target\.closest\('\[data-view\]'\), t = e\.target\.closest\('\[data-fig\]'\)/, 'figure type cards remain selectable');
 assert.match(js, /\$\('figTextControls'\)\.addEventListener\('input'/, 'figure text sliders update the live preview');
 assert.match(js, /\$\('figreset'\)\.addEventListener\('click'/, 'figure reset remains wired');

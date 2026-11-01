@@ -1155,8 +1155,7 @@ const FIGS = {
   */
 };
 const FIG_GROUPS = [
-  { name: 'Distributions', types: ['hist', 'box'] },
-  { name: 'Comparisons and relationships', types: ['bar', 'scatter'] },
+  { name: 'Distributions', types: ['hist', 'box', 'bar', 'scatter'] },
   /* Missingness chart category temporarily disabled; restore when the plot returns:
   { name: 'Data quality', types: ['miss'] }
   */
