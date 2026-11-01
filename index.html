@@ -248,8 +248,7 @@
         <h3 class="figure-step-title" id="figureDataHeading">Configure data</h3>
         <div class="figctl figure-controls" id="figctl"></div>
       </section>
-      <div class="figwrap" id="figplot" data-output></div>
-      <details class="fig-text-settings">
+      <details class="fig-text-settings" open>
         <summary>Figure text sizes</summary>
         <!-- Figure text help temporarily disabled as the slider labels describe each setting:
         <p class="note">Adjust text sizes for this figure. The preview updates as you move the sliders.</p>
@@ -262,6 +261,7 @@
           <label class="fig-text-control" for="figFontValue"><span>Value labels</span><output id="figFontValueValue" for="figFontValue" aria-live="polite">12 px</output><input type="range" id="figFontValue" data-fig-font="value" min="9" max="16" step="1" value="12"></label>
         </div>
       </details>
+      <div class="figwrap" id="figplot" data-output></div>
       <details class="figure-details">
         <summary>Figure details</summary>
         <p class="note" id="figdesc" data-output aria-live="polite"></p>
