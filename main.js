@@ -1124,7 +1124,11 @@ function initExtra() {
   $('t1copy').addEventListener('click', () => copyText(t1Matrix().map(r => r.map(tsvCell).join('\t')).join('\n'), 'Table 1 copied (tab-separated).'));
   */
   $('t1csv').addEventListener('click', () => download(t1Matrix().map(r => r.map(csvCell).join(',')).join('\r\n'), baseName().replace('_descriptive_stats', '_summary_table') + '.csv', 'text/csv'));
+  $('t1copy').addEventListener('click', () => copyText(t1Matrix().map(r => r.map(tsvCell).join('\t')).join('\n'), 'Summary table copied (tab-separated).'));
+  $('t1tsv').addEventListener('click', () => download(t1Matrix().map(r => r.map(tsvCell).join('\t')).join('\r\n'), baseName().replace('_descriptive_stats', '_summary_table') + '.tsv', 'text/tab-separated-values'));
   $('missingCsv').addEventListener('click', () => download(missingDataMatrix().map(r => r.map(csvCell).join(',')).join('\r\n'), baseName().replace('_descriptive_stats', '_missing_data') + '.csv', 'text/csv'));
+  $('missingCopy').addEventListener('click', () => copyText(missingDataMatrix().map(r => r.map(tsvCell).join('\t')).join('\n'), 'Summary of missing data copied (tab-separated).'));
+  $('missingTsv').addEventListener('click', () => download(missingDataMatrix().map(r => r.map(tsvCell).join('\t')).join('\r\n'), baseName().replace('_descriptive_stats', '_missing_data') + '.tsv', 'text/tab-separated-values'));
   $('stats').querySelector('tbody').addEventListener('change', renderT1);
   document.querySelectorAll('[data-setall]').forEach(b => b.addEventListener('click', renderT1));
 }

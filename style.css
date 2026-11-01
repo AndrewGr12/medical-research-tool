@@ -55,6 +55,8 @@ details.menu>summary{list-style:none}
 details.menu>summary::-webkit-details-marker{display:none}
 .menupanel{position:absolute;left:0;right:auto;top:calc(100% + 4px);z-index:5;display:flex;flex-direction:column;gap:6px;min-width:180px;max-width:calc(100vw - 24px);padding:10px;background:#fff;border:1px solid var(--line);border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 #exportMenu>.menupanel{left:auto;right:0}
+#exportMenu,#t1ExportMenu,#missingExportMenu{margin-left:auto;flex:0 0 auto}
+#exportMenu>.menupanel,#t1ExportMenu>.menupanel,#missingExportMenu>.menupanel{left:auto;right:0}
 .menupanel .note{margin:2px 0 0}
 details.settings{font-size:.875rem;margin:0 0 10px}
 details.settings>summary,details.section>summary{cursor:pointer;color:var(--mute);font-size:.875rem}
