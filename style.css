@@ -82,6 +82,7 @@ details.section[open]>summary,details.settings[open]>summary{margin-bottom:8px}
 .summary-setting-group .grouplabel{font-size:.9rem;font-weight:600}
 .summary-setting-group #scope{margin:8px 0 0;font-size:.8rem;line-height:1.4}
 .summary-setting-group .cat-settings{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+#catSettings[hidden]{display:none!important}
 .t1-control-layout{display:grid;grid-template-columns:minmax(190px,.7fr) minmax(0,2fr) auto;gap:12px;align-items:stretch;margin:12px 0}
 .t1-control-group{min-width:0;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .variable-selection-group{background:var(--soft)}
@@ -92,12 +93,12 @@ details.section[open]>summary,details.settings[open]>summary{margin-bottom:8px}
 .t1-select-control select{width:100%;min-height:38px;font-size:.9rem}
 .t1-check-control{display:flex;min-width:0;min-height:38px;align-items:center;gap:7px;color:var(--ink);font-size:.85rem;line-height:1.3}
 .t1-check-control input{flex:0 0 auto;accent-color:var(--accent)}
-.t1-export-group{display:flex;min-width:116px;flex-direction:column;align-items:flex-end;justify-content:center}
+.t1-export-group{display:flex;min-width:116px;flex-direction:column;align-items:center;justify-content:center}
+.t1-export-group #t1ExportMenu{margin-left:0}
 .t1-export-group #t1ExportMenu>.btn{min-height:38px}
 #tables .t1-control-group .control-group-title{font-size:.9rem}
 html[lang="ar"] .summary-setting-group .group,html[lang="ar"] .t1-configuration-controls{direction:rtl}
 html[lang="ar"] .t1-select-control{text-align:right}
-html[lang="ar"] .t1-export-group{align-items:flex-start}
 
 /* Tables */
 .tablewrap{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:4px}
@@ -156,7 +157,7 @@ dialog h2{margin-top:0;word-break:break-word}
   #tables .tables-section-heading #exportMenu{margin-left:auto}
   .t1-control-layout{grid-template-columns:minmax(0,1fr)}
   .variable-selection-group,.table-configuration-group,.t1-export-group{grid-column:1;grid-row:auto}
-  .t1-export-group{flex-direction:row;align-items:center;justify-content:space-between}
+  .t1-export-group{flex-direction:row;align-items:center;justify-content:center}
   .t1-export-group .control-group-title{margin:0;text-align:start}
 }
 @media(max-width:420px){.t1-configuration-controls{grid-template-columns:minmax(0,1fr)}}
