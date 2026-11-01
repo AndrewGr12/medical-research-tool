@@ -124,6 +124,7 @@
     <details class="section" open>
       <summary>Summary table</summary>
       <div class="t1ctl">
+        <span class="spacer"></span>
         <details class="menu" id="t1variablesMenu">
           <summary class="btn" id="t1variablesLabel">Select variables</summary>
           <div class="menupanel t1-variable-panel">
@@ -139,11 +140,13 @@
         </select>
         <label><input type="checkbox" id="t1showPValues"> Show exploratory p-values</label>
         <label><input type="checkbox" id="t1overall" checked> Overall column</label>
-        <!-- Table 1 Copy action temporarily disabled; retained for future use.
-        <button type="button" class="btn" id="t1copy">Copy</button>
-        -->
-        <button type="button" class="btn primary" id="t1csv">Download CSV</button>
-        <button type="button" class="btn primary" id="t1docx">Download Word</button>
+        <details class="menu" id="t1ExportMenu">
+          <summary class="btn primary">Export</summary>
+          <div class="menupanel">
+            <button type="button" class="btn" id="t1csv">Download CSV</button>
+            <button type="button" class="btn" id="t1docx">Download Word (.docx)</button>
+          </div>
+        </details>
       </div>
       <div class="tablewrap" data-output role="region" tabindex="0" aria-label="Scrollable summary table"><table id="t1" data-output><caption class="sr" data-output>Summary table</caption></table></div>
       <ul id="t1notes" class="note" data-output></ul>
@@ -152,6 +155,16 @@
     <details class="section" id="missingSummarySection" open>
       <summary>Summary of missing data</summary>
       <p class="note">Non-missing counts and missing counts with percentages are shown separately from the summary table. Group columns follow the summary-table settings.</p>
+      <div class="toolbar">
+        <span class="spacer"></span>
+        <details class="menu" id="missingExportMenu">
+          <summary class="btn primary">Export</summary>
+          <div class="menupanel">
+            <button type="button" class="btn" id="missingCsv">Download CSV</button>
+            <button type="button" class="btn" id="missingDocx">Download Word (.docx)</button>
+          </div>
+        </details>
+      </div>
       <div class="tablewrap" data-output role="region" tabindex="0" aria-label="Summary of missing data table"><table id="missingSummary" data-output><caption class="sr" data-output>Summary of missing data</caption></table></div>
     </details>
 

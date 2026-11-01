@@ -1078,6 +1078,7 @@ function renderT1() {
   renderMissingDataTable();
 }
 const t1Matrix = () => { const t = buildTable1(); return [t.header.map(safe), ...t.rows.map(r => [safe(r[0]), ...r.slice(1)]), [''], ...t.notes.map(x => [x])]; };
+const missingDataMatrix = () => { const t = buildMissingDataTable(); return [t.header.map(safe), ...t.rows.map(r => r.map(safe))]; };
 
 function initExtra() {
   document.addEventListener('click', e => {
@@ -1093,7 +1094,8 @@ function initExtra() {
   $('figpng').addEventListener('click', figPng);
   $('figpdf').addEventListener('click', figPdf);
   $('dlDocx').addEventListener('click', () => exportDocx(summaryDocx, baseName() + '.docx'));
-  $('t1docx').addEventListener('click', () => exportDocx(table1Docx, baseName().replace('_descriptive_stats', '_table1') + '.docx'));
+  $('t1docx').addEventListener('click', () => exportDocx(table1Docx, baseName().replace('_descriptive_stats', '_summary_table') + '.docx'));
+  $('missingDocx').addEventListener('click', () => exportDocx(missingDataDocx, baseName().replace('_descriptive_stats', '_missing_data') + '.docx'));
   /* Variable types controls are temporarily disabled; preserve handler for future use.
   $('types').addEventListener('change', async e => {
     const s = e.target.closest('select[data-tname]'), cb = e.target.closest('input[data-t1]');
@@ -1121,7 +1123,8 @@ function initExtra() {
   /* Table 1 Copy action temporarily disabled; retained for future use.
   $('t1copy').addEventListener('click', () => copyText(t1Matrix().map(r => r.map(tsvCell).join('\t')).join('\n'), 'Table 1 copied (tab-separated).'));
   */
-  $('t1csv').addEventListener('click', () => download(t1Matrix().map(r => r.map(csvCell).join(',')).join('\r\n'), baseName().replace('_descriptive_stats', '_table1') + '.csv', 'text/csv'));
+  $('t1csv').addEventListener('click', () => download(t1Matrix().map(r => r.map(csvCell).join(',')).join('\r\n'), baseName().replace('_descriptive_stats', '_summary_table') + '.csv', 'text/csv'));
+  $('missingCsv').addEventListener('click', () => download(missingDataMatrix().map(r => r.map(csvCell).join(',')).join('\r\n'), baseName().replace('_descriptive_stats', '_missing_data') + '.csv', 'text/csv'));
   $('stats').querySelector('tbody').addEventListener('change', renderT1);
   document.querySelectorAll('[data-setall]').forEach(b => b.addEventListener('click', renderT1));
 }
@@ -1358,7 +1361,8 @@ function summaryDocx() {
     [`Includes all ${rows.length - 1} detected numeric and categorical variables.`,
      'Summary method as selected per variable (Auto is a heuristic, not a normality test). SD is the sample SD (n−1); quartiles use R type 7. Missing = blank, NA, N/A, NaN, null, missing, "." or "-".']);
 }
-function table1Docx() { const t = buildTable1(); return docxBytes('Table 1 baseline characteristics', t.header, t.rows, t.notes); }
+function table1Docx() { const t = buildTable1(); return docxBytes('Summary table', t.header, t.rows, t.notes); }
+function missingDataDocx() { const t = buildMissingDataTable(); return docxBytes('Summary of missing data', t.header, t.rows, []); }
 
 function buildPdf(jpg, pxW, pxH, w, h) {   // one page, one embedded JPEG
   const m = 36, enc = s => new TextEncoder().encode(s), parts = [], off = []; let len = 0;
