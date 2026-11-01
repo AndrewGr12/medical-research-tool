@@ -1198,20 +1198,24 @@ function frame(d, inner, title, xl, yl, legend = null) {
 const need = kind => ({ msg: (kind === 'cat' ? state.categorical : state.results).length ? 'Choose a variable.' : (kind === 'cat' ? 'No categorical variables were detected. Try a histogram or box plot.' : 'No numeric variables were detected. Try a bar chart.') });
 const done = (svg, d, desc, hasLegend = false) => ({ svg, w: d.outputW || d.W, h: d.H, desc, hasLegend });
 
-function buildFigureLegend(items, marker = 'circle') {
+function buildFigureLegend(items, marker = 'circle', heading = '') {
   const size = figTextSize('legend'), rowHeight = size + 8, xPad = 8, yPad = 7;
   const labels = items.map(item => String(item.label));
-  const textWidth = Math.max(0, ...labels.map(label => label.length * size * 0.72));
-  const width = Math.ceil(textWidth + 34), height = items.length * rowHeight + yPad * 2;
+  const textWidth = Math.max(0, ...labels.map(label => label.length * size * 0.58));
+  const headingWidth = heading ? String(heading).length * size * 0.58 : 0;
+  const contentWidth = Math.max(textWidth, headingWidth);
+  const width = Math.ceil(contentWidth + xPad * 2 + 17), headingHeight = heading ? rowHeight : 0, height = items.length * rowHeight + headingHeight + yPad * 2;
+  const legendText = (x, y, text, textWidth, anchor = 'start', weight = '') => `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${size}" fill="#1d2430"${weight ? ` font-weight="${weight}"` : ''} textLength="${Math.max(1, textWidth)}" lengthAdjust="spacingAndGlyphs">${esc(text)}</text>`;
   const rows = items.map((item, i) => {
-    const baseline = yPad + size + i * rowHeight;
+    const baseline = yPad + headingHeight + size + i * rowHeight;
     const swatch = marker === 'box'
       ? `<rect x="${xPad}" y="${baseline - 9}" width="10" height="10" rx="2" fill="${item.color}" fill-opacity=".5" stroke="${item.color}"/>`
       : `<circle cx="${xPad + 5}" cy="${baseline - 4}" r="4" fill="${item.color}"/>`;
-    return swatch + T(xPad + 17, baseline, labels[i], 'start', '#1d2430', size);
+    return swatch + legendText(xPad + 17, baseline, labels[i], labels[i].length * size * 0.58);
   }).join('');
   const box = `<rect width="${width}" height="${height}" rx="5" fill="#fff" stroke="#d7dde5"/>`;
-  return { svg: box + rows, width };
+  const title = heading ? legendText(width / 2, yPad + size, String(heading), headingWidth, 'middle', 600) : '';
+  return { svg: box + title + rows, width };
 }
 
 function figHist(f) {
@@ -1237,7 +1241,7 @@ function figBox(f) {
   groups = groups.filter(x => x.v.length);
   if (!groups.length) return { msg: 'No valid observations for this selection.' };
   const all = groups.flatMap(x => x.v), lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo || 1) * 0.06;
-  const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 70 }, legend = g ? buildFigureLegend(groups.map((G, i) => ({ label: G.label, color: PAL[i % PAL.length] })), 'box') : null, sy = lin(lo - pad, hi + pad, d.H - d.b, d.t), bw = (d.W - d.l - d.r) / groups.length, bx = Math.min(60, bw * 0.5);
+  const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 70 }, legend = g ? buildFigureLegend(groups.map((G, i) => ({ label: G.label, color: PAL[i % PAL.length] })), 'box', displayVariableName(g.name)) : null, sy = lin(lo - pad, hi + pad, d.H - d.b, d.t), bw = (d.W - d.l - d.r) / groups.length, bx = Math.min(60, bw * 0.5);
   const body = groups.map((G, i) => {
     const s = computeStats(G.v), lf = s.q1 - 1.5 * s.iqr, hf = s.q3 + 1.5 * s.iqr, inside = G.v.filter(x => x >= lf && x <= hf), cx = d.l + (i + 0.5) * bw, col = PAL[g ? i % PAL.length : 0];
     const wl = Math.min(...inside), wh = Math.max(...inside);
@@ -1279,7 +1283,7 @@ function figScatter(f) {
   if (!pts.length) return { msg: 'No observations have valid values for both variables.' };
   const rng = (a, b) => a === b ? [a - 1, b + 1] : [a - (b - a) * 0.04, b + (b - a) * 0.04];
   const [x0, x1] = rng(Math.min(...pts.map(p => p[0])), Math.max(...pts.map(p => p[0]))), [y0, y1] = rng(Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[1])));
-  const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 56 }, legend = g ? buildFigureLegend(lv.map((label, i) => ({ label, color: PAL[i] }))) : null, sx = lin(x0, x1, d.l, d.W - d.r), sy = lin(y0, y1, d.H - d.b, d.t);
+  const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 56 }, legend = g ? buildFigureLegend(lv.map((label, i) => ({ label, color: PAL[i] })), 'circle', displayVariableName(g.name)) : null, sx = lin(x0, x1, d.l, d.W - d.r), sy = lin(y0, y1, d.H - d.b, d.t);
   const dots = pts.map(p => `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="3" fill="${PAL[p[2]]}" fill-opacity=".65"/>`).join('');
   return done(frame(d, yAx(d, sy, niceTicks(y0, y1)) + xAx(d, sx, niceTicks(x0, x1)) + dots, `${cut(displayVariableName(Y.name), 28)} vs ${cut(displayVariableName(X.name), 28)}`, displayVariableName(X.name), displayVariableName(Y.name), legend), d,
     `Scatter plot: ${pts.length} of ${state.rows.length} observations shown (pairs with a missing or non-numeric X or Y excluded${g ? `; ${exclG} excluded for missing ${displayVariableName(g.name)}` : ''}). No trend line is fitted.${note}`, Boolean(legend));
