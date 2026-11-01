@@ -1203,18 +1203,18 @@ function buildFigureLegend(items, marker = 'circle', heading = '') {
   const labels = items.map(item => String(item.label));
   const textWidth = Math.max(0, ...labels.map(label => label.length * size * 0.58));
   const headingWidth = heading ? String(heading).length * size * 0.58 : 0;
-  const contentWidth = Math.max(textWidth, headingWidth);
-  const width = Math.ceil(contentWidth + xPad * 2 + 17), headingHeight = heading ? rowHeight : 0, height = items.length * rowHeight + headingHeight + yPad * 2;
+  const boxWidth = Math.ceil(textWidth + xPad * 2 + 17), width = Math.max(boxWidth, Math.ceil(headingWidth + xPad * 2));
+  const headingHeight = heading ? size + 12 : 0, boxHeight = items.length * rowHeight + yPad * 2, height = headingHeight + boxHeight;
   const legendText = (x, y, text, textWidth, anchor = 'start', weight = '') => `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${size}" fill="#1d2430"${weight ? ` font-weight="${weight}"` : ''} textLength="${Math.max(1, textWidth)}" lengthAdjust="spacingAndGlyphs">${esc(text)}</text>`;
   const rows = items.map((item, i) => {
-    const baseline = yPad + headingHeight + size + i * rowHeight;
+    const baseline = headingHeight + yPad + size + i * rowHeight;
     const swatch = marker === 'box'
       ? `<rect x="${xPad}" y="${baseline - 9}" width="10" height="10" rx="2" fill="${item.color}" fill-opacity=".5" stroke="${item.color}"/>`
       : `<circle cx="${xPad + 5}" cy="${baseline - 4}" r="4" fill="${item.color}"/>`;
     return swatch + legendText(xPad + 17, baseline, labels[i], labels[i].length * size * 0.58);
   }).join('');
-  const box = `<rect width="${width}" height="${height}" rx="5" fill="#fff" stroke="#d7dde5"/>`;
-  const title = heading ? legendText(width / 2, yPad + size, String(heading), headingWidth, 'middle', 600) : '';
+  const box = `<rect y="${headingHeight}" width="${boxWidth}" height="${boxHeight}" rx="5" fill="#fff" stroke="#d7dde5"/>`;
+  const title = heading ? legendText(xPad, size, String(heading), headingWidth, 'start', 600) : '';
   return { svg: box + title + rows, width };
 }
 
