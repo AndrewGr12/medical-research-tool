@@ -228,6 +228,8 @@ td.ind{padding-left:28px}
 .figure-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:12px 0 4px}
 .figure-actions .btn{min-height:40px}
 #figureExportMenu>.menupanel{left:auto;right:0}
+#figureExportMenu>summary.btn{display:flex;align-items:center;justify-content:center;text-align:center}
+#figureExportMenu>summary.btn::marker{content:""}
 html[lang="ar"] .figtype-options,html[lang="ar"] .figure-controls{direction:rtl}
 html[lang="ar"] .fig-field{text-align:right}
 
