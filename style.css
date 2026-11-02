@@ -44,7 +44,7 @@ footer.privacy{display:flex;justify-content:space-between;align-items:flex-start
 .fileinfo{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:12px}
 .fileinfo h2{margin:0 0 4px;word-break:break-all}
 dl#fstats{display:flex;flex-wrap:wrap;gap:2px 20px;margin:0;font-size:.875rem}
-#fstats div{display:flex;gap:6px}#fstats dt{color:var(--mute)}#fstats dd{margin:0;font-weight:600}#fstats .count-first{flex-direction:row-reverse}
+#fstats div{display:flex;gap:6px}#fstats dt{color:var(--mute)}#fstats dd{margin:0;font-weight:600}#fstats .count-first,html[lang="ar"] #fstats div{flex-direction:row-reverse}
 
 /* Toolbar */
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
