@@ -10,8 +10,8 @@ const start = source.indexOf('// ---------- Group comparison tests');
 const end = source.indexOf('function buildTable1()', start);
 assert(start >= 0 && end > start, 'Could not find the isolated statistical functions in main.js');
 const context = {};
-vm.runInNewContext(`${source.slice(start, end)}\nglobalThis.api = { selectComparisonTest, pText, fisher2x2 };`, context);
-const { selectComparisonTest, pText, fisher2x2 } = context.api;
+vm.runInNewContext(`${source.slice(start, end)}\nglobalThis.api = { selectComparisonTest, pText, fisher2x2, holmAdjust, boxPlotTests, figurePText };`, context);
+const { selectComparisonTest, pText, fisher2x2, holmAdjust, boxPlotTests, figurePText } = context.api;
 const near = (actual, expected, tolerance = 1e-6) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} differs from ${expected}`);
 
 // Welch's two-sample t-test: reference value for [1,2] versus [3,4].
@@ -29,6 +29,13 @@ const mw = selectComparisonTest('numeric', [[1, 2, 3], [4, 5, 6]], 'nonparametri
 assert.equal(mw.method, 'Mann–Whitney U (exact permutation)'); near(mw.p, 0.1);
 const kw = selectComparisonTest('numeric', [[1, 2], [3, 4], [5, 6]], 'nonparametric');
 assert.equal(kw.method, 'Kruskal–Wallis (exact permutation)'); near(kw.p, 1 / 15);
+
+// Holm correction is monotone and bounded, and box-plot annotations use the existing tests.
+const holm = holmAdjust([{ p: 0.01 }, { p: 0.04 }, { p: 0.03 }, { p: null }]);
+near(holm[0].adjusted, 0.03); near(holm[1].adjusted, 0.06); near(holm[2].adjusted, 0.06); assert.equal(holm[3].adjusted, null);
+assert.equal(figurePText(7e-6), '7.00e−6');
+const boxTest = boxPlotTests([{ v: [1, 2, 3] }, { v: [4, 5, 6] }, { v: [7, 8, 9] }], { showP: true, testMode: 'nonparametric' });
+assert.match(boxTest.annotations, /Kruskal–Wallis/); assert.equal('pairs' in boxTest, false, 'box plots show only the overall p-value');
 
 // Sparse 2x2 table: standard two-sided Fisher exact reference example.
 const fisherReference = fisher2x2([[1, 9], [11, 3]]);

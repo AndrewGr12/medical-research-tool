@@ -213,6 +213,19 @@ td.ind{padding-left:28px}
 .figure-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:0;padding:14px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
 .fig-field{display:flex;min-width:0;flex-direction:column;gap:5px;color:var(--mute);font-size:.9rem;font-weight:600}
 .fig-field select{width:100%;min-height:42px;padding:6px 9px;font-size:.95rem}
+.fig-field input[type=text],.fig-field input[type=number]{width:100%;min-height:42px;padding:6px 9px;border:1px solid #b5bdc8;border-radius:4px;font:inherit}
+.fig-field input[type=color]{width:100%;min-height:42px;padding:4px;border:1px solid #b5bdc8;border-radius:4px;background:#fff}
+.fig-field input[type=range]{width:100%;min-height:28px;accent-color:var(--accent);touch-action:pan-x}
+.fig-field.fig-check{display:flex;flex-direction:row;align-items:center;gap:9px;min-height:42px;color:var(--ink)}
+.fig-field.fig-check input{width:18px;height:18px;accent-color:var(--accent)}
+.fig-field.fig-check.is-disabled{color:var(--mute);opacity:.55;cursor:not-allowed}
+.fig-field.fig-check input:disabled{cursor:not-allowed;accent-color:var(--mute)}
+.fig-color-settings{grid-column:1/-1;min-width:0;padding-top:4px}
+.fig-color-settings>strong{display:block;margin:0 0 8px;color:var(--mute);font-size:.9rem}
+.fig-color-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px}
+.fig-group-color{display:flex;min-width:0;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);font-size:.875rem}
+.fig-group-color span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fig-group-color input[type=color]{width:38px;min-width:38px;height:32px;min-height:32px;padding:2px}
 .fig-text-settings{margin:14px 0 10px;border-radius:8px}
 .fig-text-settings>summary{font-size:1rem}
 .fig-text-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 20px;padding:12px 16px 16px}
@@ -222,6 +235,7 @@ td.ind{padding-left:28px}
 .figwrap{min-height:380px;margin:0;padding:16px}
 .figwrap.is-bar-chart{min-height:0}
 .figwrap svg{margin:0 auto}
+.figwrap.fade-soft{animation-duration:.18s}
 .figure-details{margin:10px 0 4px;border-bottom:1px solid var(--line)}
 .figure-details>summary{padding:7px 2px;color:var(--mute);font-size:.9rem;cursor:pointer}
 .figure-details .note{margin:0;padding:2px 2px 10px;line-height:1.45}

@@ -844,6 +844,26 @@ function finiteTest(p, method, reason = '') {
 }
 function pText(result) { return result.p === null ? 'NA' : result.p < 0.001 ? `<${localFixed(0.001, 3)}` : localFixed(result.p, 3); }
 function pTitle(result) { return result.p === null ? `${result.method}: ${result.reason}` : `${result.method}; complete observations only.`; }
+function holmAdjust(results) {
+  const ranked = results.map((r, i) => ({ ...r, i })).filter(r => r.p !== null).sort((a, b) => a.p - b.p);
+  let prior = 0;
+  ranked.forEach((r, rank) => { r.adjusted = Math.min(1, Math.max(prior, r.p * (ranked.length - rank))); prior = r.adjusted; });
+  return results.map((r, i) => ({ ...r, adjusted: ranked.find(x => x.i === i)?.adjusted ?? null }));
+}
+function figurePText(p) {
+  if (!Number.isFinite(p)) return 'NA';
+  if (p === 0) return '<1e-300';
+  if (p < 0.001) return p.toExponential(2).replace('e-', 'e−');
+  return p.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+}
+function boxPlotTests(groups, f) {
+  if (!f.showP) return { annotations: '', note: '' };
+  if (groups.length < 2) return { annotations: '', note: 'At least two non-empty groups are required for a comparison.' };
+  const mode = f.testMode === 'nonparametric' ? 'nonparametric' : 'parametric';
+  const global = selectComparisonTest('numeric', groups.map(g => g.v), mode);
+  const label = global.p === null ? `${global.method}: NA` : `${global.method}, p = ${figurePText(global.p)}`;
+  return { annotations: label, global, note: `${global.method}${global.p === null ? ` unavailable: ${global.reason}` : `, p = ${figurePText(global.p)}`}.` };
+}
 function meanVariance(x) {
   const n = x.length, mean = x.reduce((a, b) => a + b, 0) / n;
   return { n, mean, variance: n > 1 ? x.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1) : NaN };
@@ -1099,7 +1119,7 @@ function initExtra() {
     if (v) showView(v.dataset.view);
     else if (t) { state.fig.type = t.dataset.fig; figRefresh(); if (state.view !== 'figures') return; }
   });
-  $('figctl').addEventListener('input', e => { const k = e.target.dataset.f; if (!k) return; state.fig[k] = k === 'bins' ? (Math.floor(+e.target.value) || 0) : e.target.value; figDraw(); });
+  $('figctl').addEventListener('input', e => { const groupLabel = e.target.dataset.groupColor; if (groupLabel) { const groupName = e.target.dataset.groupVariable; state.fig.groupColors ||= {}; state.fig.groupColors[groupName] ||= {}; state.fig.groupColors[groupName][groupLabel] = e.target.value; figDraw(); return; } const k = e.target.dataset.f; if (!k) return; state.fig[k] = ['bins'].includes(k) ? (Math.floor(+e.target.value) || 0) : ['opacity', 'pointSize'].includes(k) ? Number(e.target.value) : e.target.type === 'checkbox' ? e.target.checked : e.target.value; if (k === 'showP' || k === 'g' || k === 'palette') figRefresh(); else if (['title', 'xLabel', 'yLabel'].includes(k)) { clearTimeout(window.figureInputTimer); window.figureInputTimer = setTimeout(figDraw, 180); } else figDraw(); });
   $('figTextControls').addEventListener('input', e => { const key = e.target.dataset.figFont; if (!key || !state.fig) return; const value = Number(e.target.value); ensureFigureTextSizes(state.fig)[key] = value; const output = document.getElementById(e.target.id + 'Value'); if (output) { output.value = value + ' px'; output.textContent = value + ' px'; } figDraw(); });
   $('figreset').addEventListener('click', () => { state.fig = null; figRefresh(); });
   $('figsvg').addEventListener('click', () => { const svg = displayedFigureSvg(); if (figCur && svg) download(svg, figName('svg'), 'image/svg+xml'); });
@@ -1148,7 +1168,13 @@ function initExtra() {
 
 // ---------- Views & Figures (SVG generated from the loaded data; no charting library) ----------
 let figCur = null;
-const PAL = ['#1f4e79', '#E69F00', '#009E73', '#CC79A7', '#56B4E9', '#D55E00', '#999999'];   // Okabe-Ito based
+const PALETTES = {
+  colorblind: ['#0072B2', '#E69F00', '#009E73', '#CC79A7', '#56B4E9', '#D55E00', '#999999'],
+  classic: ['#1f4e79', '#E69F00', '#009E73', '#CC79A7', '#56B4E9', '#D55E00', '#999999'],
+  vibrant: ['#4361ee', '#f72585', '#4cc9f0', '#f8961e', '#43aa8b', '#9b5de5', '#f94144']
+};
+const palette = () => PALETTES[state.fig?.palette] || PALETTES.colorblind;
+const PAL = PALETTES.classic;
 const FIGS = {
   hist: { name: 'Histogram', info: 'Distribution of a numeric variable', needs: 'Numeric', icon: '<path d="M3 20V12h4v8M9 20V5h4v15M15 20V9h4v11"/>' },
   box: { name: 'Box plot', info: 'Median, IQR, Tukey outliers; optional groups', needs: 'Numeric + optional categorical', icon: '<path d="M6 8h12v8H6zM12 8V3M12 16v5M6 12h12"/>' },
@@ -1184,6 +1210,14 @@ const cut = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
 const lin = (d0, d1, r0, r1) => v => r0 + (v - d0) / ((d1 - d0) || 1) * (r1 - r0);
 const numVar = n => state.results.find(r => r.name === n), catVar = n => state.categorical.find(r => r.name === n);
 const byFreq = c => [...c.freq].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'en', { numeric: true }));
+function boxGroupLabels(r, g, f) {
+  if (!r || !g) return [];
+  const valid = new Set();
+  r.nums.forEach((x, i) => { if (x !== null && g.labels[i] !== null) valid.add(g.labels[i]); });
+  let labels = byFreq(g).map(x => x[0]).filter(label => valid.has(label));
+  if (f.order === 'alpha') labels.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return labels.slice(0, 12);
+}
 function niceTicks(lo, hi, n = 5) {
   if (!(hi > lo)) return [lo];
   const raw = (hi - lo) / n, p = 10 ** Math.floor(Math.log10(raw)), f = raw / p, step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p, out = [];
@@ -1191,16 +1225,20 @@ function niceTicks(lo, hi, n = 5) {
   return out;
 }
 const T = (x, y, s, a = 'middle', fill = '#1d2430', sz = 12) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="${sz}" fill="${fill}">${esc(s)}</text>`;
-const yAx = (d, sy, tk) => tk.map(v => `<line x1="${d.l}" x2="${d.W - d.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="#e3e7ec"/>${T(d.l - 6, sy(v) + 4, tl(v), 'end', '#5b6573', figTextSize('tick'))}`).join('') + `<line x1="${d.l}" x2="${d.l}" y1="${d.t}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
+const yAx = (d, sy, tk) => tk.map(v => `${state.fig?.showGrid === false ? '' : `<line x1="${d.l}" x2="${d.W - d.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="#e3e7ec"/>`}${T(d.l - 6, sy(v) + 4, tl(v), 'end', '#5b6573', figTextSize('tick'))}`).join('') + `<line x1="${d.l}" x2="${d.l}" y1="${d.t}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
 const xAx = (d, sx, tk) => tk.map(v => `<line x1="${sx(v)}" x2="${sx(v)}" y1="${d.H - d.b}" y2="${d.H - d.b + 5}" stroke="#5b6573"/>${T(sx(v), d.H - d.b + 18, tl(v), 'middle', '#5b6573', figTextSize('tick'))}`).join('') + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
 function frame(d, inner, title, xl, yl, legend = null) {
+  if (state.fig?.showLegend === false) legend = null;
+  title = state.fig?.title?.trim() || title;
+  xl = state.fig?.xLabel?.trim() || xl;
+  yl = state.fig?.yLabel?.trim() || yl;
   const outputW = d.W + (legend ? legend.width + 24 : 0);
   d.outputW = outputW;
   const legendSvg = legend ? `<g transform="translate(${d.W + 16} 34)">${legend.svg}</g>` : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${outputW} ${d.H}" width="${outputW}" height="${d.H}" font-family="system-ui, Arial, sans-serif" role="img" aria-label="${esc(title)}"><title>${esc(title)}</title><rect width="${outputW}" height="${d.H}" fill="#fff"/><text x="${d.W / 2}" y="${Math.max(22, figTextSize('title') + 6)}" text-anchor="middle" font-size="${figTextSize('title')}" font-weight="600" fill="#1d2430">${esc(title)}</text>${inner}${legendSvg}${T((d.l + d.W - d.r) / 2, d.H - 10, xl, 'middle', '#1d2430', figTextSize('axis'))}${yl ? `<text transform="translate(16 ${(d.t + d.H - d.b) / 2}) rotate(-90)" text-anchor="middle" font-size="${figTextSize('axis')}" fill="#1d2430">${esc(yl)}</text>` : ''}</svg>`;
 }
 const need = kind => ({ msg: (kind === 'cat' ? state.categorical : state.results).length ? 'Choose a variable.' : (kind === 'cat' ? 'No categorical variables were detected. Try a histogram or box plot.' : 'No numeric variables were detected. Try a bar chart.') });
-const done = (svg, d, desc, hasLegend = false) => ({ svg, w: d.outputW || d.W, h: d.H, desc, hasLegend });
+const done = (svg, d, desc, hasLegend = false) => ({ svg, w: d.outputW || d.W, h: d.H, desc, hasLegend: hasLegend && state.fig?.showLegend !== false });
 
 function buildFigureLegend(items, marker = 'circle', heading = '') {
   const size = figTextSize('legend'), rowHeight = size + 8, xPad = 8, yPad = 7;
@@ -1225,11 +1263,13 @@ function buildFigureLegend(items, marker = 'circle', heading = '') {
 function figHist(f) {
   const r = numVar(f.x); if (!r) return need('num');
   const v = r.nums.filter(x => x !== null), constant = r.min === r.max;
-  const k = constant ? 1 : f.bins > 0 ? Math.min(100, f.bins) : Math.max(5, Math.min(40, Math.ceil(Math.log2(v.length) + 1)));   // Sturges default
+  const stats = v.length ? computeStats(v) : { iqr: 0 };
+  const autoBins = f.binRule === 'sqrt' ? Math.ceil(Math.sqrt(v.length)) : f.binRule === 'fd' && stats.iqr > 0 ? Math.ceil((r.max - r.min) / (2 * stats.iqr / Math.cbrt(v.length))) : Math.ceil(Math.log2(v.length) + 1);
+  const k = constant ? 1 : f.bins > 0 ? Math.min(100, f.bins) : Math.max(1, Math.min(100, autoBins));
   const a = constant ? r.min - 0.5 : r.min, b = constant ? r.max + 0.5 : r.max, w = (b - a) / k, c = new Array(k).fill(0);
   v.forEach(x => c[Math.min(k - 1, Math.floor((x - a) / w))]++);
   const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 56 }, ymax = Math.max(...c), sx = lin(a, b, d.l, d.W - d.r), sy = lin(0, ymax, d.H - d.b, d.t);
-  const bars = c.map((n, i) => `<rect x="${sx(a + i * w) + 0.5}" y="${sy(n)}" width="${Math.max(0, sx(a + (i + 1) * w) - sx(a + i * w) - 1)}" height="${sy(0) - sy(n)}" fill="${PAL[0]}"/>`).join('');
+  const bars = c.map((n, i) => `<rect x="${sx(a + i * w) + 0.5}" y="${sy(n)}" width="${Math.max(0, sx(a + (i + 1) * w) - sx(a + i * w) - 1)}" height="${sy(0) - sy(n)}" fill="${f.color || palette()[0]}" fill-opacity="${f.opacity ?? 0.85}"/>`).join('');
   return done(frame(d, yAx(d, sy, niceTicks(0, ymax)) + bars + xAx(d, sx, niceTicks(a, b)), `Distribution of ${cut(displayVariableName(r.name), 50)}`, displayVariableName(r.name), 'Frequency'), d,
     `Histogram of ${displayVariableName(r.name)}: n = ${v.length} plotted; ${state.rows.length - v.length} missing or non-numeric excluded; ${k} bin${k === 1 ? '' : 's'} of width ${tl(w)}.`);
 }
@@ -1238,31 +1278,34 @@ function figBox(f) {
   const r = numVar(f.x); if (!r) return need('num');
   const g = f.g ? catVar(f.g) : null; let excl = 0, hiddenObs = 0, hiddenLv = 0, groups;
   if (g) {
-    const shown = byFreq(g).map(x => x[0]); hiddenLv = Math.max(0, shown.length - 12); shown.length = Math.min(12, shown.length);
+    const validLabels = new Set(); r.nums.forEach((x, i) => { if (x !== null && g.labels[i] !== null) validLabels.add(g.labels[i]); });
+    const shown = boxGroupLabels(r, g, f); hiddenLv = Math.max(0, validLabels.size - shown.length);
     groups = shown.map(k => ({ label: k, v: [] })); const ix = new Map(shown.map((k, i) => [k, i]));
     r.nums.forEach((x, i) => { if (x === null) return; const l = g.labels[i]; if (l === null) excl++; else if (ix.has(l)) groups[ix.get(l)].v.push(x); else hiddenObs++; });
   } else groups = [{ label: 'All', v: r.nums.filter(x => x !== null) }];
   groups = groups.filter(x => x.v.length);
   if (!groups.length) return { msg: 'No valid observations for this selection.' };
   const all = groups.flatMap(x => x.v), lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo || 1) * 0.06;
-  const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 70 }, legend = g ? buildFigureLegend(groups.map((G, i) => ({ label: G.label, color: PAL[i % PAL.length] })), 'box', displayVariableName(g.name)) : null, sy = lin(lo - pad, hi + pad, d.H - d.b, d.t), bw = (d.W - d.l - d.r) / groups.length, bx = Math.min(60, bw * 0.5);
+  const test = g ? boxPlotTests(groups, f) : { note: '' };
+  const d = { W: 640, H: 400 + (test.annotations ? 45 : 0), l: 62, r: 20, t: test.annotations ? 80 : 40, b: 70 }, colors = palette(), groupColor = (G, i) => f.groupColors?.[g?.name]?.[G.label] || colors[i % colors.length], legend = g ? buildFigureLegend(groups.map((G, i) => ({ label: G.label, color: groupColor(G, i) })), 'box', displayVariableName(g.name)) : null, sy = lin(lo - pad, hi + pad, d.H - d.b, d.t), bw = (d.W - d.l - d.r) / groups.length, bx = Math.min(60, bw * 0.5);
   const body = groups.map((G, i) => {
-    const s = computeStats(G.v), lf = s.q1 - 1.5 * s.iqr, hf = s.q3 + 1.5 * s.iqr, inside = G.v.filter(x => x >= lf && x <= hf), cx = d.l + (i + 0.5) * bw, col = PAL[g ? i % PAL.length : 0];
+    const s = computeStats(G.v), lf = s.q1 - 1.5 * s.iqr, hf = s.q3 + 1.5 * s.iqr, inside = G.v.filter(x => x >= lf && x <= hf), cx = d.l + (i + 0.5) * bw, col = g ? groupColor(G, i) : colors[0];
     const wl = Math.min(...inside), wh = Math.max(...inside);
-    return `<g stroke="#1d2430" stroke-width="1.5"><line x1="${cx}" x2="${cx}" y1="${sy(wl)}" y2="${sy(s.q1)}"/><line x1="${cx}" x2="${cx}" y1="${sy(s.q3)}" y2="${sy(wh)}"/><line x1="${cx - bx / 4}" x2="${cx + bx / 4}" y1="${sy(wl)}" y2="${sy(wl)}"/><line x1="${cx - bx / 4}" x2="${cx + bx / 4}" y1="${sy(wh)}" y2="${sy(wh)}"/><rect x="${cx - bx / 2}" y="${sy(s.q3)}" width="${bx}" height="${Math.max(1, sy(s.q1) - sy(s.q3))}" fill="${col}" fill-opacity=".35"/><line x1="${cx - bx / 2}" x2="${cx + bx / 2}" y1="${sy(s.median)}" y2="${sy(s.median)}" stroke-width="3"/></g>`
-      + G.v.filter(x => x < lf || x > hf).map(x => `<circle cx="${cx}" cy="${sy(x)}" r="3" fill="none" stroke="#1d2430"/>`).join('')
+    const pointMarks = f.showPoints ? G.v.map((x, j) => `<circle cx="${cx + (((j * 37) % 11) - 5) * Math.min(1.5, bw / 80)}" cy="${sy(x)}" r="${f.pointSize || 3}" fill="${col}" fill-opacity="${Math.min(0.8, f.opacity ?? 0.35)}" stroke="#1d2430" stroke-width=".5"/>`).join('') : G.v.filter(x => x < lf || x > hf).map(x => `<circle cx="${cx}" cy="${sy(x)}" r="${f.pointSize || 3}" fill="none" stroke="#1d2430"/>`).join('');
+    return `<g stroke="#1d2430" stroke-width="1.5"><line x1="${cx}" x2="${cx}" y1="${sy(wl)}" y2="${sy(s.q1)}"/><line x1="${cx}" x2="${cx}" y1="${sy(s.q3)}" y2="${sy(wh)}"/><line x1="${cx - bx / 4}" x2="${cx + bx / 4}" y1="${sy(wl)}" y2="${sy(wl)}"/><line x1="${cx - bx / 4}" x2="${cx + bx / 4}" y1="${sy(wh)}" y2="${sy(wh)}"/><rect x="${cx - bx / 2}" y="${sy(s.q3)}" width="${bx}" height="${Math.max(1, sy(s.q1) - sy(s.q3))}" fill="${col}" fill-opacity="${f.opacity ?? 0.35}"/><line x1="${cx - bx / 2}" x2="${cx + bx / 2}" y1="${sy(s.median)}" y2="${sy(s.median)}" stroke-width="3"/></g>` + pointMarks
       + (g ? T(cx, d.H - d.b + 16, cut(G.label, 12), 'middle', '#1d2430', figTextSize('tick')) : '') + T(cx, d.H - d.b + (g ? 36 : 16), `n=${G.v.length}`, 'middle', '#5b6573', figTextSize('value'));
   }).join('');
-  const ax = yAx(d, sy, niceTicks(lo - pad, hi + pad)) + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
+  let ax = yAx(d, sy, niceTicks(lo - pad, hi + pad)) + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
+  if (test.annotations) ax += T(d.l, 26, test.annotations, 'start', '#1d2430', figTextSize('value'));
   return done(frame(d, ax + body, g ? `${cut(displayVariableName(r.name), 30)} by ${cut(displayVariableName(g.name), 25)}` : cut(displayVariableName(r.name), 60), g ? displayVariableName(g.name) : '', displayVariableName(r.name), legend), d,
-    `Box plot of ${displayVariableName(r.name)}${g ? ` by ${displayVariableName(g.name)}` : ''}: n = ${all.length} plotted. Box = Q1–Q3 (R type 7) with median line; whiskers reach the most extreme values within 1.5×IQR; circles beyond are outliers and are not removed. Excluded: ${r.nums.length - r.nums.filter(x => x !== null).length} missing/non-numeric${g ? `; ${excl} with missing group; ${hiddenObs} in ${hiddenLv} less frequent level(s) not shown (max 12 groups)` : ''}.`, Boolean(legend));
+    `Box plot of ${displayVariableName(r.name)}${g ? ` by ${displayVariableName(g.name)}` : ''}: n = ${all.length} plotted. Box = Q1–Q3 (R type 7) with median line; whiskers reach the most extreme values within 1.5×IQR; circles beyond are outliers and are not removed. Excluded: ${r.nums.length - r.nums.filter(x => x !== null).length} missing/non-numeric${g ? `; ${excl} with missing group; ${hiddenObs} in ${hiddenLv} less frequent level(s) not shown (max 12 groups). ${test.note || ''}${f.showP ? ' P-values are exploratory, compare independent groups, and use complete observations.' : ''}` : ''}.`, Boolean(legend));
 }
 
 function figBar(f) {
   const c = catVar(f.c); if (!c) return need('cat');
-  const lv = byFreq(c), shown = lv.slice(0, 15), hid = lv.length - shown.length, pct = f.mode === 'pct';
+  const lv = byFreq(c); if (f.order === 'alpha') lv.sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })); const shown = lv.slice(0, 15), hid = lv.length - shown.length, pct = f.mode === 'pct';
   const d = { W: 640, H: 112 + 26 * shown.length, l: 140, r: Math.max(90, figTextSize('value') * 8), t: 56, b: 56 }, vals = shown.map(([, n]) => pct ? 100 * n / c.nonMissing : n), mx = Math.max(...vals), sx = lin(0, mx, d.l, d.W - d.r);
-  const bars = shown.map(([k, n], i) => { const y = d.t + 2 + i * 26, p = 100 * n / c.nonMissing; return T(d.l - 6, y + 14, cut(k, Math.max(8, Math.floor(220 / figTextSize('tick')))), 'end', '#1d2430', figTextSize('tick')) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(vals[i]) - d.l)}" height="20" fill="${PAL[0]}"/>` + T(sx(vals[i]) + 4, y + 14, `${outCount(n)} (${localFixed(p, 1)}%)`, 'start', '#1d2430', figTextSize('value')); }).join('');
+  const bars = shown.map(([k, n], i) => { const y = d.t + 2 + i * 26, p = 100 * n / c.nonMissing; return T(d.l - 6, y + 14, cut(k, Math.max(8, Math.floor(220 / figTextSize('tick')))), 'end', '#1d2430', figTextSize('tick')) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(vals[i]) - d.l)}" height="20" fill="${f.color || palette()[0]}" fill-opacity="${f.opacity ?? 0.85}"/>` + T(sx(vals[i]) + 4, y + 14, `${outCount(n)} (${localFixed(p, 1)}%)`, 'start', '#1d2430', figTextSize('value')); }).join('');
   return done(frame(d, xAx(d, sx, niceTicks(0, mx)) + bars, cut(displayVariableName(c.name), 60), pct ? `Percent of non-missing (n = ${c.nonMissing})` : 'Count', ''), d,
     `Bar chart of ${displayVariableName(c.name)}: ${c.nonMissing} non-missing observations; ${c.missing} missing excluded from percentages.${hid ? ` Showing the 15 most frequent of ${lv.length} levels; ${hid} not shown.` : ''}`);
 }
@@ -1287,21 +1330,26 @@ function figScatter(f) {
   if (!pts.length) return { msg: 'No observations have valid values for both variables.' };
   const rng = (a, b) => a === b ? [a - 1, b + 1] : [a - (b - a) * 0.04, b + (b - a) * 0.04];
   const [x0, x1] = rng(Math.min(...pts.map(p => p[0])), Math.max(...pts.map(p => p[0]))), [y0, y1] = rng(Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[1])));
-  const d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 56 }, legend = g ? buildFigureLegend(lv.map((label, i) => ({ label, color: PAL[i] })), 'circle', displayVariableName(g.name)) : null, sx = lin(x0, x1, d.l, d.W - d.r), sy = lin(y0, y1, d.H - d.b, d.t);
-  const dots = pts.map(p => `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="3" fill="${PAL[p[2]]}" fill-opacity=".65"/>`).join('');
-  return done(frame(d, yAx(d, sy, niceTicks(y0, y1)) + xAx(d, sx, niceTicks(x0, x1)) + dots, `${cut(displayVariableName(Y.name), 28)} vs ${cut(displayVariableName(X.name), 28)}`, displayVariableName(X.name), displayVariableName(Y.name), legend), d,
+  const colors = palette(), d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 56 }, legend = g ? buildFigureLegend(lv.map((label, i) => ({ label, color: colors[i] })), 'circle', displayVariableName(g.name)) : null, sx = lin(x0, x1, d.l, d.W - d.r), sy = lin(y0, y1, d.H - d.b, d.t);
+  const dots = pts.map(p => `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="${f.pointSize || 3}" fill="${g ? colors[p[2]] : (f.color || colors[0])}" fill-opacity="${f.opacity ?? 0.65}"/>`).join('');
+  const meanX = pts.reduce((s, p) => s + p[0], 0) / pts.length, meanY = pts.reduce((s, p) => s + p[1], 0) / pts.length, varianceX = pts.reduce((s, p) => s + (p[0] - meanX) ** 2, 0), slope = varianceX ? pts.reduce((s, p) => s + (p[0] - meanX) * (p[1] - meanY), 0) / varianceX : 0;
+  const trend = f.showTrend && varianceX ? `<line x1="${sx(x0)}" y1="${sy(meanY + slope * (x0 - meanX))}" x2="${sx(x1)}" y2="${sy(meanY + slope * (x1 - meanX))}" stroke="#111827" stroke-width="2" stroke-dasharray="6 4"/>` : '';
+  return done(frame(d, yAx(d, sy, niceTicks(y0, y1)) + xAx(d, sx, niceTicks(x0, x1)) + trend + dots, `${cut(displayVariableName(Y.name), 28)} vs ${cut(displayVariableName(X.name), 28)}`, displayVariableName(X.name), displayVariableName(Y.name), legend), d,
     `Scatter plot: ${pts.length} of ${state.rows.length} observations shown (pairs with a missing or non-numeric X or Y excluded${g ? `; ${exclG} excluded for missing ${displayVariableName(g.name)}` : ''}). No trend line is fitted.${note}`, Boolean(legend));
 }
 
 function figRefresh() {
   const num = state.results.map(r => r.name), cat = state.categorical.map(r => r.name);
-  const f = state.fig || (state.fig = { type: 'hist', x: '', y: '', c: '', g: '', bins: 0, mode: 'count' });
+  const f = state.fig || (state.fig = { type: 'hist', x: '', y: '', c: '', g: '', bins: 0, mode: 'count', palette: 'colorblind', showGrid: true, showLegend: true, showP: false, testMode: 'nonparametric', order: 'frequency' });
   if (!FIGS[f.type]) f.type = 'hist';
   ensureFigureTextSizes(f); syncFigureTextControls();
   if (!num.includes(f.x)) f.x = num[0] || '';
   if (!num.includes(f.y)) f.y = num[1] || num[0] || '';
   if (!cat.includes(f.c)) f.c = cat[0] || '';
   if (f.g && !cat.includes(f.g)) f.g = '';
+  f.opacity ??= f.type === 'box' ? 0.35 : f.type === 'scatter' ? 0.65 : 0.85;
+  f.pointSize ??= 3;
+  f.palette ??= 'colorblind';
   const tx = value => window.AppI18n?.text(value) ?? value;
   const figureCards = FIG_GROUPS.map((group, groupIndex) => `<section class="figtype-category" aria-labelledby="figCategory-${groupIndex}"><h4 id="figCategory-${groupIndex}">${tx(group.name)}</h4><div class="figtype-options" role="group" aria-label="${esc(tx(group.name))}">${group.types.map(k => {
     const v = FIGS[k];
@@ -1310,9 +1358,16 @@ function figRefresh() {
   $('figtypes').innerHTML = figureCards;
   $('figureDataStep').hidden = false;
   const S = (id, label, list, val, none) => `<label class="fig-field" for="fig${id}"><span>${tx(label)}</span><select id="fig${id}" class="method" data-f="${id}">${none ? `<option value="">${tx('None')}</option>` : ''}${list.length ? list.map(n => `<option data-raw value="${esc(n)}"${n === val ? ' selected' : ''}>${esc(displayVariableName(n))}</option>`).join('') : !none ? `<option value="">${tx('Choose a variable.')}</option>` : ''}</select></label>`;
-  $('figctl').innerHTML = { hist: () => S('x', 'Variable', num, f.x) /* + `<label for="figbins">Bins</label><input id="figbins" data-f="bins" type="number" min="1" max="100" value="${f.bins || ''}">` */, 
-    box: () => S('x', 'Variable', num, f.x) + S('g', 'Group by', cat, f.g, true), bar: () => S('c', 'Variable', cat, f.c) + `<label class="fig-field" for="figmode"><span>${tx('Show')}</span><select id="figmode" class="method" data-f="mode"><option value="count"${f.mode === 'count' ? ' selected' : ''}>${tx('Counts')}</option><option value="pct"${f.mode === 'pct' ? ' selected' : ''}>${tx('Percent')}</option></select></label>`,
+  const legendDisabled = f.type === 'box' && !f.g;
+  const common = `<label class="fig-field"><span>${tx('Palette')}</span><select class="method" data-f="palette"><option value="colorblind"${f.palette === 'colorblind' ? ' selected' : ''}>${tx('Color-blind friendly')}</option><option value="classic"${f.palette === 'classic' ? ' selected' : ''}>${tx('Classic')}</option><option value="vibrant"${f.palette === 'vibrant' ? ' selected' : ''}>${tx('Vibrant')}</option></select></label>${(f.type === 'box' && f.g) || (f.type === 'scatter' && f.g) ? '' : `<label class="fig-field"><span>${tx('Color')}</span><input data-f="color" type="color" value="${/^#[0-9a-f]{6}$/i.test(f.color || '') ? f.color : '#0072b2'}"></label>`}<label class="fig-field"><span>${tx('Figure title')}</span><input class="method" data-f="title" type="text" maxlength="100" value="${esc(f.title || '')}" placeholder="${tx('Use default title')}"></label><label class="fig-field"><span>${tx('X-axis title')}</span><input class="method" data-f="xLabel" type="text" maxlength="80" value="${esc(f.xLabel || '')}" placeholder="${tx('Use default label')}"></label><label class="fig-field"><span>${tx('Y-axis title')}</span><input class="method" data-f="yLabel" type="text" maxlength="80" value="${esc(f.yLabel || '')}" placeholder="${tx('Use default label')}"></label><label class="fig-field fig-check"><input type="checkbox" data-f="showGrid"${f.showGrid !== false ? ' checked' : ''}><span>${tx('Show gridlines')}</span></label>${['box', 'scatter'].includes(f.type) ? `<label class="fig-field fig-check${legendDisabled ? ' is-disabled' : ''}"><input type="checkbox" data-f="showLegend"${f.showLegend !== false ? ' checked' : ''}${legendDisabled ? ' disabled aria-disabled="true"' : ''}><span>${tx('Show legend')}</span></label>` : ''}${f.type === 'scatter' ? `<label class="fig-field fig-check"><input type="checkbox" data-f="showTrend"${f.showTrend ? ' checked' : ''}><span>${tx('Show linear trend line')}</span></label>` : ''}`;
+  const styleControls = `<label class="fig-field"><span>${tx('Opacity')}</span><input data-f="opacity" type="range" min="0.2" max="1" step="0.05" value="${f.opacity ?? 0.75}"></label><label class="fig-field"><span>${tx(f.type === 'scatter' ? 'Point size' : 'Outlier size')}</span><input data-f="pointSize" type="range" min="1" max="8" step="0.5" value="${f.pointSize || 3}"></label>`;
+  /* Group order, individual points, and Holm-adjusted pairwise p-value controls are intentionally commented out per request. */
+  const boxControls = f.type === 'box' ? `<label class="fig-field fig-check"><input type="checkbox" data-f="showP"${f.showP ? ' checked' : ''}${f.g ? '' : ' disabled'}><span>${tx('Show p-values')}</span></label><label class="fig-field"><span>${tx('Statistical test')}</span><select class="method" data-f="testMode"${f.g ? '' : ' disabled'}><option value="nonparametric"${f.testMode === 'nonparametric' ? ' selected' : ''}>${tx('Nonparametric (Kruskal–Wallis / Mann–Whitney)')}</option><option value="parametric"${f.testMode === 'parametric' ? ' selected' : ''}>${tx('Parametric (Welch ANOVA / Welch t-test)')}</option></select></label>` : '';
+  const groupColorControls = f.type === 'box' && f.g ? (() => { const gv = catVar(f.g), rv = numVar(f.x); if (!gv || !rv) return ''; const colors = palette(), labels = boxGroupLabels(rv, gv, f); return labels.length ? `<div class="fig-color-settings"><strong>${tx('Group colors')}</strong><div class="fig-color-grid">${labels.map((label, i) => { const chosen = f.groupColors?.[gv.name]?.[label]; const color = /^#[0-9a-f]{6}$/i.test(chosen || '') ? chosen : colors[i % colors.length]; return `<label class="fig-group-color"><span>${esc(displayVariableName(label))}</span><input type="color" data-group-variable="${esc(gv.name)}" data-group-color="${esc(label)}" value="${color}" aria-label="${esc(tx('Color for'))} ${esc(displayVariableName(label))}"></label>`; }).join('')}</div></div>` : ''; })() : '';
+  const dataControls = { hist: () => S('x', 'Variable', num, f.x) + `<label class="fig-field"><span>${tx('Bins (0 = automatic)')}</span><input class="method" data-f="bins" type="number" min="0" max="100" value="${f.bins || 0}"></label><label class="fig-field"><span>${tx('Automatic bin rule')}</span><select class="method" data-f="binRule"><option value="sturges"${!f.binRule || f.binRule === 'sturges' ? ' selected' : ''}>Sturges</option><option value="sqrt"${f.binRule === 'sqrt' ? ' selected' : ''}>Square root</option><option value="fd"${f.binRule === 'fd' ? ' selected' : ''}>Freedman–Diaconis</option></select></label>`,
+    box: () => S('x', 'Variable', num, f.x) + S('g', 'Group by', cat, f.g, true), bar: () => S('c', 'Variable', cat, f.c) + `<label class="fig-field" for="figmode"><span>${tx('Show')}</span><select id="figmode" class="method" data-f="mode"><option value="count"${f.mode === 'count' ? ' selected' : ''}>${tx('Counts')}</option><option value="pct"${f.mode === 'pct' ? ' selected' : ''}>${tx('Percent')}</option></select></label><label class="fig-field"><span>${tx('Category order')}</span><select class="method" data-f="order"><option value="frequency"${f.order !== 'alpha' ? ' selected' : ''}>${tx('Most frequent')}</option><option value="alpha"${f.order === 'alpha' ? ' selected' : ''}>${tx('Alphabetical')}</option></select></label>`,
     scatter: () => S('x', 'X', num, f.x) + S('y', 'Y', num, f.y) + S('g', 'Color by', cat, f.g, true) }[f.type]();
+  $('figctl').innerHTML = dataControls + boxControls + groupColorControls + common + styleControls;
   if (state.view === 'figures') figDraw();
 }
 function figDraw() {

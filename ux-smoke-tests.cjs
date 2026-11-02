@@ -274,4 +274,14 @@ const docxBytes = Buffer.from(docxContext.testDocx).toString('utf8');
 for (const edge of ['top','left','bottom','right','insideH','insideV']) assert.ok(docxBytes.includes(`<w:${edge} w:val="single"`), `Word export includes ${edge} grid borders`);
 assert.ok((docxBytes.match(/<w:tc>/g) || []).length >= 4, 'Word export contains individual table cells');
 
+assert.match(js, /function boxPlotTests\(groups, f\)/, 'box plots have an isolated group-test annotation helper');
+assert.doesNotMatch(js, /data-f="showPairwise"/, 'Holm pairwise p-value controls are commented out');
+assert.doesNotMatch(js, /test\.pairs\.forEach/, 'pairwise p-value brackets are disabled');
+assert.doesNotMatch(js, /tx\('Group order'\)|data-f="showPoints"/, 'box-plot group-order and individual-point controls are commented out');
+assert.ok(js.indexOf("tx('Show p-values')") < js.indexOf("tx('Statistical test')"), 'p-value and test controls occupy the first two box-specific control slots');
+assert.match(js, /data-f="binRule"/, 'histograms expose automatic binning rules');
+assert.match(js, /data-f="showTrend"/, 'scatter plots expose an optional trend line');
+assert.match(js, /data-f="showP"/, 'p-value control is restricted to grouped box plots');
+assert.equal(localeContext.window.AppI18n.text('Show p-values', 'ar'), 'إظهار قيم p', 'new figure controls are translated into Arabic');
+
 console.log('All UX package smoke checks passed.');
