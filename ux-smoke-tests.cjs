@@ -281,6 +281,9 @@ assert.doesNotMatch(js, /tx\('Group order'\)|data-f="showPoints"/, 'box-plot gro
 assert.ok(js.indexOf("tx('Show p-values')") < js.indexOf("tx('Statistical test')"), 'p-value and test controls occupy the first two box-specific control slots');
 assert.match(js, /data-f="binRule"/, 'histograms expose automatic binning rules');
 assert.match(js, /data-f="showTrend"/, 'scatter plots expose an optional trend line');
+assert.match(js, /function scatterGroupLabels\(X, Y, g\)/, 'scatter group-color controls use categories with plotted data');
+assert.match(js, /f\.type === 'scatter' && f\.g[\s\S]*?figureGroupColorMarkup\(gv\.name, scatterGroupLabels/, 'scatter color-by groups expose individual color pickers');
+assert.match(js, /colorFor\(lv\[p\[2\]\], p\[2\]\)/, 'scatter custom category colors are used for plotted points');
 assert.match(js, /data-f="showP"/, 'p-value control is restricted to grouped box plots');
 assert.equal(localeContext.window.AppI18n.text('Show p-values', 'ar'), 'إظهار قيم p', 'new figure controls are translated into Arabic');
 

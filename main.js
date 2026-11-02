@@ -1218,6 +1218,17 @@ function boxGroupLabels(r, g, f) {
   if (f.order === 'alpha') labels.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   return labels.slice(0, 12);
 }
+function scatterGroupLabels(X, Y, g) {
+  if (!X || !Y || !g) return [];
+  const valid = new Set();
+  state.rows.forEach((_, i) => { if (X.nums[i] !== null && Y.nums[i] !== null && g.labels[i] !== null) valid.add(g.labels[i]); });
+  return byFreq(g).map(x => x[0]).filter(label => valid.has(label));
+}
+function figureGroupColorMarkup(groupName, labels, f, tx) {
+  if (!labels.length) return '';
+  const colors = palette(), custom = f.groupColors?.[groupName] || {};
+  return `<div class="fig-color-settings"><strong>${tx('Group colors')}</strong><div class="fig-color-grid">${labels.map((label, i) => { const chosen = custom[label]; const color = /^#[0-9a-f]{6}$/i.test(chosen || '') ? chosen : colors[i % colors.length]; return `<label class="fig-group-color"><span>${esc(displayVariableName(label))}</span><input type="color" data-group-variable="${esc(groupName)}" data-group-color="${esc(label)}" value="${color}" aria-label="${esc(tx('Color for'))} ${esc(displayVariableName(label))}"></label>`; }).join('')}</div></div>`;
+}
 function niceTicks(lo, hi, n = 5) {
   if (!(hi > lo)) return [lo];
   const raw = (hi - lo) / n, p = 10 ** Math.floor(Math.log10(raw)), f = raw / p, step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p, out = [];
@@ -1325,13 +1336,13 @@ function figScatter(f) {
   const X = numVar(f.x), Y = numVar(f.y); if (!X || !Y) return need('num');
   let g = f.g ? catVar(f.g) : null, note = '';
   if (g && g.unique > 7) { note = ` Color-by “${displayVariableName(g.name)}” ignored (more than 7 levels).`; g = null; }
-  const lv = g ? byFreq(g).map(x => x[0]) : [], pts = []; let exclG = 0;
+  const lv = g ? scatterGroupLabels(X, Y, g) : [], pts = []; let exclG = 0;
   state.rows.forEach((_, i) => { const x = X.nums[i], y = Y.nums[i]; if (x === null || y === null) return; if (g && g.labels[i] === null) { exclG++; return; } pts.push([x, y, g ? lv.indexOf(g.labels[i]) : 0]); });
   if (!pts.length) return { msg: 'No observations have valid values for both variables.' };
   const rng = (a, b) => a === b ? [a - 1, b + 1] : [a - (b - a) * 0.04, b + (b - a) * 0.04];
   const [x0, x1] = rng(Math.min(...pts.map(p => p[0])), Math.max(...pts.map(p => p[0]))), [y0, y1] = rng(Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[1])));
-  const colors = palette(), d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 56 }, legend = g ? buildFigureLegend(lv.map((label, i) => ({ label, color: colors[i] })), 'circle', displayVariableName(g.name)) : null, sx = lin(x0, x1, d.l, d.W - d.r), sy = lin(y0, y1, d.H - d.b, d.t);
-  const dots = pts.map(p => `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="${f.pointSize || 3}" fill="${g ? colors[p[2]] : (f.color || colors[0])}" fill-opacity="${f.opacity ?? 0.65}"/>`).join('');
+  const colors = palette(), colorFor = (label, i) => { const custom = f.groupColors?.[g?.name]?.[label]; return /^#[0-9a-f]{6}$/i.test(custom || '') ? custom : colors[i % colors.length]; }, d = { W: 640, H: 400, l: 62, r: 20, t: 40, b: 56 }, legend = g ? buildFigureLegend(lv.map((label, i) => ({ label, color: colorFor(label, i) })), 'circle', displayVariableName(g.name)) : null, sx = lin(x0, x1, d.l, d.W - d.r), sy = lin(y0, y1, d.H - d.b, d.t);
+  const dots = pts.map(p => `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="${f.pointSize || 3}" fill="${g ? colorFor(lv[p[2]], p[2]) : (f.color || colors[0])}" fill-opacity="${f.opacity ?? 0.65}"/>`).join('');
   const meanX = pts.reduce((s, p) => s + p[0], 0) / pts.length, meanY = pts.reduce((s, p) => s + p[1], 0) / pts.length, varianceX = pts.reduce((s, p) => s + (p[0] - meanX) ** 2, 0), slope = varianceX ? pts.reduce((s, p) => s + (p[0] - meanX) * (p[1] - meanY), 0) / varianceX : 0;
   const trend = f.showTrend && varianceX ? `<line x1="${sx(x0)}" y1="${sy(meanY + slope * (x0 - meanX))}" x2="${sx(x1)}" y2="${sy(meanY + slope * (x1 - meanX))}" stroke="#111827" stroke-width="2" stroke-dasharray="6 4"/>` : '';
   return done(frame(d, yAx(d, sy, niceTicks(y0, y1)) + xAx(d, sx, niceTicks(x0, x1)) + trend + dots, `${cut(displayVariableName(Y.name), 28)} vs ${cut(displayVariableName(X.name), 28)}`, displayVariableName(X.name), displayVariableName(Y.name), legend), d,
@@ -1363,7 +1374,9 @@ function figRefresh() {
   const styleControls = `<label class="fig-field"><span>${tx('Opacity')}</span><input data-f="opacity" type="range" min="0.2" max="1" step="0.05" value="${f.opacity ?? 0.75}"></label><label class="fig-field"><span>${tx(f.type === 'scatter' ? 'Point size' : 'Outlier size')}</span><input data-f="pointSize" type="range" min="1" max="8" step="0.5" value="${f.pointSize || 3}"></label>`;
   /* Group order, individual points, and Holm-adjusted pairwise p-value controls are intentionally commented out per request. */
   const boxControls = f.type === 'box' ? `<label class="fig-field fig-check"><input type="checkbox" data-f="showP"${f.showP ? ' checked' : ''}${f.g ? '' : ' disabled'}><span>${tx('Show p-values')}</span></label><label class="fig-field"><span>${tx('Statistical test')}</span><select class="method" data-f="testMode"${f.g ? '' : ' disabled'}><option value="nonparametric"${f.testMode === 'nonparametric' ? ' selected' : ''}>${tx('Nonparametric (Kruskal–Wallis / Mann–Whitney)')}</option><option value="parametric"${f.testMode === 'parametric' ? ' selected' : ''}>${tx('Parametric (Welch ANOVA / Welch t-test)')}</option></select></label>` : '';
-  const groupColorControls = f.type === 'box' && f.g ? (() => { const gv = catVar(f.g), rv = numVar(f.x); if (!gv || !rv) return ''; const colors = palette(), labels = boxGroupLabels(rv, gv, f); return labels.length ? `<div class="fig-color-settings"><strong>${tx('Group colors')}</strong><div class="fig-color-grid">${labels.map((label, i) => { const chosen = f.groupColors?.[gv.name]?.[label]; const color = /^#[0-9a-f]{6}$/i.test(chosen || '') ? chosen : colors[i % colors.length]; return `<label class="fig-group-color"><span>${esc(displayVariableName(label))}</span><input type="color" data-group-variable="${esc(gv.name)}" data-group-color="${esc(label)}" value="${color}" aria-label="${esc(tx('Color for'))} ${esc(displayVariableName(label))}"></label>`; }).join('')}</div></div>` : ''; })() : '';
+  let groupColorControls = '';
+  if (f.type === 'box' && f.g) { const gv = catVar(f.g), rv = numVar(f.x); if (gv && rv) groupColorControls = figureGroupColorMarkup(gv.name, boxGroupLabels(rv, gv, f), f, tx); }
+  else if (f.type === 'scatter' && f.g) { const gv = catVar(f.g), X = numVar(f.x), Y = numVar(f.y); if (gv && gv.unique <= 7) groupColorControls = figureGroupColorMarkup(gv.name, scatterGroupLabels(X, Y, gv), f, tx); }
   const dataControls = { hist: () => S('x', 'Variable', num, f.x) + `<label class="fig-field"><span>${tx('Bins (0 = automatic)')}</span><input class="method" data-f="bins" type="number" min="0" max="100" value="${f.bins || 0}"></label><label class="fig-field"><span>${tx('Automatic bin rule')}</span><select class="method" data-f="binRule"><option value="sturges"${!f.binRule || f.binRule === 'sturges' ? ' selected' : ''}>Sturges</option><option value="sqrt"${f.binRule === 'sqrt' ? ' selected' : ''}>Square root</option><option value="fd"${f.binRule === 'fd' ? ' selected' : ''}>Freedman–Diaconis</option></select></label>`,
     box: () => S('x', 'Variable', num, f.x) + S('g', 'Group by', cat, f.g, true), bar: () => S('c', 'Variable', cat, f.c) + `<label class="fig-field" for="figmode"><span>${tx('Show')}</span><select id="figmode" class="method" data-f="mode"><option value="count"${f.mode === 'count' ? ' selected' : ''}>${tx('Counts')}</option><option value="pct"${f.mode === 'pct' ? ' selected' : ''}>${tx('Percent')}</option></select></label><label class="fig-field"><span>${tx('Category order')}</span><select class="method" data-f="order"><option value="frequency"${f.order !== 'alpha' ? ' selected' : ''}>${tx('Most frequent')}</option><option value="alpha"${f.order === 'alpha' ? ' selected' : ''}>${tx('Alphabetical')}</option></select></label>`,
     scatter: () => S('x', 'X', num, f.x) + S('y', 'Y', num, f.y) + S('g', 'Color by', cat, f.g, true) }[f.type]();

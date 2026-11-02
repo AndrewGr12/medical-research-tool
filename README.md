@@ -47,7 +47,7 @@ The Figures view keeps its existing page layout and SVG-based rendering while ad
 - Histograms support Sturges, square-root, or Freedman–Diaconis automatic bin rules, plus a manual bin count.
 - Box plots support per-category color pickers when grouped; each color is used for both the box and its legend item. With no group selected, a single-series color picker is available. The legend control stays disabled until a group is selected.
 - Grouped box plots can display one overall exploratory p-value, using Welch or Kruskal–Wallis (Mann–Whitney U for two groups). Pairwise Holm p-values, group ordering, and individual-point controls are currently disabled.
-- Bar charts support count or percentage display and category ordering. Scatter plots support grouping colors, point styling, and an optional linear trend line.
+- Bar charts support count or percentage display and category ordering. Scatter plots support a custom color for each selected `Color by` category, point styling, and an optional linear trend line. Custom colors apply to both points and matching legend keys.
 - Figure titles and axis titles, color palettes, opacity, gridlines, and legend visibility are customizable where they apply.
 
 The standalone implementation copy remains at `C:\Users\16179\figure-studio-upgrade-v2`. The app changes copied into this repository are the production files listed above; figure-only test coverage has been added to the existing statistics and UX smoke-test scripts.
