@@ -237,7 +237,7 @@ function askPatientId(headers, rows) {
   select.innerHTML = '<option value="">Choose a column…</option>' + headers.map(h => `<option value="${esc(h)}">${esc(displayVariableName(h))}</option>`).join('');
   const suggestion = suggestPatientId(headers, rows);
   $('patientSuggestion').hidden = !suggestion;
-  $('patientSuggestion').textContent = suggestion ? `Possible patient ID: “${displayVariableName(suggestion.name)}” (${suggestion.unique} unique non-missing values). Select it if appropriate. Nothing is excluded until you choose the column and confirm.` : '';
+  $('patientSuggestion').textContent = suggestion ? `Possible participant ID: “${displayVariableName(suggestion.name)}” (${suggestion.unique} unique non-missing values). Select it if this column identifies participants; nothing is excluded until you confirm.` : '';
   $('patientYes').disabled = true;
   dialog.returnValue = '';
   dialog.showModal();
@@ -347,7 +347,8 @@ function uploadConsentGranted(dialog, file) {
 
 // ---------- Rendering ----------
 function renderAll(warnings) {
-  if ($('results').hidden) fadeHide($('landing'), () => { fadeShow($('results')); const h = $('home').querySelector('[data-h]'); if (h) h.focus(); });
+  if ($('results').hidden) fadeHide($('landing'), () => { fadeShow($('results')); $('restart').hidden = false; const h = $('home').querySelector('[data-h]'); if (h) h.focus(); });
+  else $('restart').hidden = false;
   $('fname').textContent = state.fileName;
   $('fname').setAttribute('data-raw', '');
   $('fstats').innerHTML = [['Rows', state.rows.length], ['Columns', state.headers.length], ['Numeric', state.results.length], ['Categorical', state.categorical.length], ['Excluded', state.excluded.length]]
@@ -1176,10 +1177,10 @@ const PALETTES = {
 const palette = () => PALETTES[state.fig?.palette] || PALETTES.colorblind;
 const PAL = PALETTES.classic;
 const FIGS = {
-  hist: { name: 'Histogram', info: 'Distribution of a numeric variable', needs: 'Numeric', icon: '<path d="M3 20V12h4v8M9 20V5h4v15M15 20V9h4v11"/>' },
-  box: { name: 'Box plot', info: 'Median, IQR, Tukey outliers; optional groups', needs: 'Numeric + optional categorical', icon: '<path d="M6 8h12v8H6zM12 8V3M12 16v5M6 12h12"/>' },
-  bar: { name: 'Bar chart', info: 'Category counts or percentages', needs: 'Categorical', icon: '<path d="M4 6h12M4 12h16M4 18h8"/>' },
-  scatter: { name: 'Scatter plot', info: 'Two numeric variables', needs: 'Two numeric + optional categorical', icon: '<circle cx="6" cy="17" r="1.5"/><circle cx="11" cy="11" r="1.5"/><circle cx="17" cy="14" r="1.5"/><circle cx="19" cy="6" r="1.5"/>' },
+  hist: { name: 'Histogram', info: 'Show how values are distributed', needs: 'Choose one numeric column', icon: '<path d="M3 20V12h4v8M9 20V5h4v15M15 20V9h4v11"/>' },
+  box: { name: 'Box plot', info: 'Compare a numeric variable across groups', needs: 'Choose one numeric column; grouping is optional', icon: '<path d="M6 8h12v8H6zM12 8V3M12 16v5M6 12h12"/>' },
+  bar: { name: 'Bar chart', info: 'Show counts or percentages by category', needs: 'Choose one category column', icon: '<path d="M4 6h12M4 12h16M4 18h8"/>' },
+  scatter: { name: 'Scatter plot', info: 'Show the relationship between two numeric variables', needs: 'Choose two numeric columns; grouping is optional', icon: '<circle cx="6" cy="17" r="1.5"/><circle cx="11" cy="11" r="1.5"/><circle cx="17" cy="14" r="1.5"/><circle cx="19" cy="6" r="1.5"/>' },
   /* Missingness chart temporarily disabled; restore this entry when the plot returns:
   miss: { name: 'Missingness', info: 'Missing values per variable', needs: 'All variables', icon: '<path d="M4 5h16M4 10h10M4 15h6M4 20h13"/>' }
   */
@@ -1248,7 +1249,7 @@ function frame(d, inner, title, xl, yl, legend = null) {
   const legendSvg = legend ? `<g transform="translate(${d.W + 16} 34)">${legend.svg}</g>` : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${outputW} ${d.H}" width="${outputW}" height="${d.H}" font-family="system-ui, Arial, sans-serif" role="img" aria-label="${esc(title)}"><title>${esc(title)}</title><rect width="${outputW}" height="${d.H}" fill="#fff"/><text x="${d.W / 2}" y="${Math.max(22, figTextSize('title') + 6)}" text-anchor="middle" font-size="${figTextSize('title')}" font-weight="600" fill="#1d2430">${esc(title)}</text>${inner}${legendSvg}${T((d.l + d.W - d.r) / 2, d.H - 10, xl, 'middle', '#1d2430', figTextSize('axis'))}${yl ? `<text transform="translate(16 ${(d.t + d.H - d.b) / 2}) rotate(-90)" text-anchor="middle" font-size="${figTextSize('axis')}" fill="#1d2430">${esc(yl)}</text>` : ''}</svg>`;
 }
-const need = kind => ({ msg: (kind === 'cat' ? state.categorical : state.results).length ? 'Choose a variable.' : (kind === 'cat' ? 'No categorical variables were detected. Try a histogram or box plot.' : 'No numeric variables were detected. Try a bar chart.') });
+const need = kind => ({ msg: (kind === 'cat' ? state.categorical : state.results).length ? 'Choose a variable.' : (kind === 'cat' ? 'No category columns were detected. Try a histogram or box plot using a numeric column.' : 'No numeric columns were detected. Try a bar chart using a category column.') });
 const done = (svg, d, desc, hasLegend = false) => ({ svg, w: d.outputW || d.W, h: d.H, desc, hasLegend: hasLegend && state.fig?.showLegend !== false });
 
 function buildFigureLegend(items, marker = 'circle', heading = '') {
@@ -1364,7 +1365,7 @@ function figRefresh() {
   const tx = value => window.AppI18n?.text(value) ?? value;
   const figureCards = FIG_GROUPS.map((group, groupIndex) => `<section class="figtype-category" aria-labelledby="figCategory-${groupIndex}"><h4 id="figCategory-${groupIndex}">${tx(group.name)}</h4><div class="figtype-options" role="group" aria-label="${esc(tx(group.name))}">${group.types.map(k => {
     const v = FIGS[k];
-    return `<button type="button" class="figtype" data-fig="${k}" aria-pressed="${f.type === k}"><svg viewBox="0 0 24 24" aria-hidden="true">${v.icon}</svg><strong>${tx(v.name)}</strong><!-- Figure description retained for future use: <span>${tx(v.info)}</span> --></button>`;
+    return `<button type="button" class="figtype" data-fig="${k}" aria-pressed="${f.type === k}"><svg viewBox="0 0 24 24" aria-hidden="true">${v.icon}</svg><strong>${tx(v.name)}</strong><span class="figtype-help">${tx(v.info)}<br><small>${tx(v.needs)}</small></span></button>`;
   }).join('')}</div></section>`).join('');
   $('figtypes').innerHTML = figureCards;
   $('figureDataStep').hidden = false;
@@ -1507,6 +1508,7 @@ function figPdf() {
 function reset() {
   // About page reset logic temporarily disabled: aboutReturnState = null; $('aboutPage').hidden = true;
   document.querySelector('.page-header').hidden = false;
+  $('restart').hidden = true;
   $('landing').hidden = false;
   Object.assign(state, { fileName: '', patientId: '', headers: [], rows: [], results: [], categorical: [], excluded: [], cols: [], types: {}, choices: {}, t1: { group: '', overall: true, testMode: 'parametric', showPValues: false, skip: new Set(), selected: new Set(), catChoices: {} }, sortKey: null, sortDir: 1 });
   state.fig = null; state.view = 'home'; $('warnings').hidden = true; $('warnings').innerHTML = '';

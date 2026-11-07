@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Data Analysis Assistant</title>
+<title>Clinical Data Analysis Assistant</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main class="wrap fade-in">
   <header class="page-header">
     <div>
-      <h1 data-raw>Data Analysis Assistant</h1>
+      <h1 data-raw>Clinical Data Analysis Assistant</h1>
     </div>
     <div class="header-actions"><!-- About the Author navigation temporarily disabled; retained for future use.
     <button type="button" id="aboutOpen" class="btn">About the Author</button>
-    --><button type="button" id="restart" class="btn primary">Restart Analysis</button></div>
+    --><button type="button" id="restart" class="btn primary" hidden>Restart Analysis</button></div>
   </header>
 
   <section class="language-picker" aria-label="Choose your language">
@@ -27,15 +27,190 @@
       <button type="button" class="btn" data-locale="ar" aria-pressed="false"><span class="language-letter" aria-hidden="true">ض</span>العربية</button>
     </div>
   </section>
-  <p id="siteSubtitle" class="sub" hidden>Transform your clinical data into tables and visualizations!</p>
+  <section class="tool-guide" aria-label="How the data analysis tool works" hidden>
+    <div class="guide-steps">
+      <article class="guide-step workflow-card workflow-prepare">
+        <div class="workflow-preview prepare-preview" aria-hidden="true">
+          <svg viewBox="0 0 164 66" focusable="false">
+            <rect x="10" y="5" width="144" height="56" rx="7" fill="#fff" stroke="#dce6e1"/>
+            <path d="M10 12a7 7 0 0 1 7-7h130a7 7 0 0 1 7 7v8H10z" fill="#eaf4ee"/>
+            <circle cx="19" cy="12" r="2" fill="#5b9b78"/><text x="26" y="15" class="preview-file">study_data.csv</text>
+            <rect x="17" y="25" width="130" height="10" rx="2" fill="#f1f6f3"/>
+            <path d="M59 25v31M94 25v31M119 25v31M17 35h130M17 45h130M17 55h130" stroke="#e2eae5" stroke-width="1"/>
+            <text x="21" y="32" class="preview-head">ID</text><text x="64" y="32" class="preview-head">Age</text><text x="98" y="32" class="preview-head">BMI</text><text x="123" y="32" class="preview-head">Group</text>
+            <text x="21" y="42" class="preview-cell">P01</text><text x="66" y="42" class="preview-cell">54</text><text x="98" y="42" class="preview-cell">23.1</text><text x="123" y="42" class="preview-cell">A</text>
+            <text x="21" y="52" class="preview-cell">P02</text><text x="66" y="52" class="preview-cell">61</text><text x="98" y="52" class="preview-cell">27.4</text><text x="123" y="52" class="preview-cell">B</text>
+          </svg>
+          <div class="preview-badges"><span>CSV</span><span>XLSX</span></div>
+        </div>
+        <h2>Prepare Your Clinical Data</h2><p><span>One row per participant</span><br><span>One column per variable</span></p>
+      </article>
+      <article class="guide-step workflow-card workflow-upload">
+        <div class="workflow-preview upload-preview" aria-hidden="true">
+          <svg viewBox="0 0 164 66" focusable="false">
+            <path d="M40 7h39l17 17v34a4 4 0 0 1-4 4H40a4 4 0 0 1-4-4V11a4 4 0 0 1 4-4z" fill="#fff" stroke="#dce6e1" stroke-width="1.5"/>
+            <path d="M79 7v13a4 4 0 0 0 4 4h13" fill="#eaf4ee" stroke="#dce6e1" stroke-width="1.5"/>
+            <rect x="46" y="31" width="42" height="16" rx="4" fill="#eaf4ee"/><text x="67" y="42" text-anchor="middle" class="preview-badge-text">CSV</text>
+            <circle cx="117" cy="38" r="20" fill="#f0f5fb" stroke="#d8e3f0"/>
+            <path d="M117 47V29m-7 7 7-7 7 7M107 49h20" fill="none" stroke="#397ac0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h2>Upload Your File</h2><p>Choose a de-identified CSV or Excel file</p>
+      </article>
+      <article class="guide-step workflow-card workflow-analyze">
+        <div class="workflow-preview analyze-preview" aria-hidden="true">
+          <svg viewBox="0 0 164 66" focusable="false">
+            <rect x="18" y="5" width="128" height="56" rx="7" fill="#fff" stroke="#dce6e1"/>
+            <path d="M34 48h100M40 48V35h14v13M64 48V25h14v23M88 48V31h14v17M112 48V17h14v31" fill="#dcece4" stroke="#4b8b70" stroke-width="1.2"/>
+            <path d="M35 17h94" stroke="#e8eeeb"/>
+            <circle cx="47" cy="35" r="2.5" fill="#397ac0"/><circle cx="71" cy="25" r="2.5" fill="#397ac0"/><circle cx="95" cy="31" r="2.5" fill="#397ac0"/><circle cx="119" cy="17" r="2.5" fill="#397ac0"/>
+            <text x="40" y="57" class="preview-axis">A</text><text x="64" y="57" class="preview-axis">B</text><text x="88" y="57" class="preview-axis">C</text><text x="112" y="57" class="preview-axis">D</text>
+          </svg>
+        </div>
+        <h2>Analyze Your Data</h2><p>Select variables and analysis options</p>
+      </article>
+      <article class="guide-step guide-step-final workflow-card workflow-results">
+        <div class="workflow-preview results-preview" aria-hidden="true">
+          <svg viewBox="0 0 164 66" focusable="false">
+            <rect x="8" y="10" width="73" height="48" rx="5" fill="#fff" stroke="#dce6e1"/>
+            <path d="M8 20h73M8 30h73M8 40h73M8 50h73M34 20v38M57 20v38" stroke="#e1e9e4"/>
+            <rect x="12" y="13" width="65" height="5" rx="2" fill="#dcece4"/>
+            <rect x="42" y="25" width="10" height="3" rx="1.5" fill="#80aa92"/><rect x="65" y="25" width="10" height="3" rx="1.5" fill="#80aa92"/>
+            <rect x="42" y="35" width="10" height="3" rx="1.5" fill="#80aa92"/><rect x="65" y="35" width="10" height="3" rx="1.5" fill="#80aa92"/>
+            <rect x="42" y="45" width="10" height="3" rx="1.5" fill="#80aa92"/><rect x="65" y="45" width="10" height="3" rx="1.5" fill="#80aa92"/>
+            <rect x="91" y="10" width="65" height="48" rx="5" fill="#fff" stroke="#dce6e1"/>
+            <path d="M101 47h47M104 47V34h8v13M117 47V27h8v20M130 47V20h8v27" fill="#dcece4" stroke="#4b8b70" stroke-width="1.2"/>
+            <path d="m101 31 12-6 11 3 15-10" fill="none" stroke="#397ac0" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h2>Generate Results</h2><p>Create summary tables and figures</p>
+      </article>
+    </div>
+    <section class="guide-output-examples" aria-labelledby="guideOutputExamplesTitle">
+    <h3 id="guideOutputExamplesTitle">Examples of outputs you can create</h3>
+    <div class="guide-example-panels" aria-label="Examples of generated outputs">
+      <article class="guide-example-panel">
+        <svg viewBox="0 0 100 54" aria-hidden="true" focusable="false">
+          <rect x="14" y="6" width="72" height="42" rx="3" fill="#fff" stroke="#cddbd3"/>
+          <rect x="17" y="10" width="66" height="7" rx="1" fill="#eaf4ee"/>
+          <path d="M17 24h66M17 31h66M17 38h66M39 17v28M61 17v28" stroke="#dce6e1" stroke-width="1"/>
+          <path d="M43 21h12M65 21h12M43 28h12M65 28h12M43 35h12M65 35h12" stroke="#78a88e" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <h3>Table</h3>
+      </article>
+      <article class="guide-example-panel">
+        <svg viewBox="0 0 100 54" aria-hidden="true" focusable="false">
+          <path d="M15 44h72M19 44V34h12v10M34 44V25h12v19M49 44V17h12v27M64 44V28h12v16M79 44V35h7v9" fill="#dcece4" stroke="#4b8b70" stroke-width="1.5"/>
+          <path d="M19 44h67" stroke="#8b9992" stroke-width="1"/>
+        </svg>
+        <h3>Histogram</h3>
+      </article>
+      <article class="guide-example-panel">
+        <svg viewBox="0 0 100 54" aria-hidden="true" focusable="false">
+          <path d="M50 8v9M50 38v9M42 8h16M42 47h16" stroke="#46534f" stroke-width="1.5"/>
+          <rect x="38" y="17" width="24" height="21" fill="#dcecf5" stroke="#397ac0" stroke-width="1.5"/>
+          <path d="M38 27h24" stroke="#287fa7" stroke-width="2.5"/>
+          <circle cx="50" cy="5" r="1.5" fill="#fff" stroke="#46534f"/><circle cx="50" cy="50" r="1.5" fill="#fff" stroke="#46534f"/>
+        </svg>
+        <h3>Box plot</h3>
+      </article>
+      <article class="guide-example-panel">
+        <svg viewBox="0 0 100 54" aria-hidden="true" focusable="false">
+          <path d="M18 43h68M19 43V11" stroke="#8b9992" stroke-width="1"/>
+          <path d="M26 43V27h15v16M50 43V17h15v26M74 43V23h9v20" fill="#dcece4" stroke="#4b8b70" stroke-width="1.5"/>
+        </svg>
+        <h3>Bar chart</h3>
+      </article>
+      <article class="guide-example-panel">
+        <svg viewBox="0 0 100 54" aria-hidden="true" focusable="false">
+          <path d="M17 43h70M19 43V10" stroke="#8b9992" stroke-width="1"/>
+          <g fill="#397ac0"><circle cx="29" cy="35" r="2.5"/><circle cx="39" cy="29" r="2.5"/><circle cx="48" cy="32" r="2.5"/><circle cx="57" cy="21" r="2.5"/><circle cx="68" cy="24" r="2.5"/><circle cx="78" cy="14" r="2.5"/></g>
+          <path d="m25 38 57-26" stroke="#78a88e" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <h3>Scatterplot</h3>
+      </article>
+    </div>
+    </section>
+    <!-- The Table and Figures summary is retained for possible future use.
+    <div class="guide-outputs">
+      <article><h3><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="1.5"/><path d="M3 8h14M8 3v14"/></svg>Table</h3><p>Baseline characteristics</p><p class="guide-detail">Age · Sex · BMI · Comorbidities</p></article>
+      <article><h3><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17V9m5 8V5m5 12v-6m4 6V3M2 18h17"/></svg>Figures</h3><p>Visualize your findings</p><p class="guide-detail">Distributions · Comparisons</p></article>
+    </div>
+    -->
+    <div class="guide-actions"><!-- Language-change action temporarily disabled: <button type="button" class="btn" id="guideChangeLanguage">Change language</button> --><button type="button" class="btn primary" id="guideContinue">Continue to file upload</button></div>
+  </section>
+  <!-- Retained for possible future use: the expanded From Data to Discovery landing page.
+  <h2 id="siteSubtitle" class="transform-title" hidden>From Data to Discovery</h2>
 
-  <section id="landing" aria-label="Upload" hidden>
+  <section id="landing" class="research-transform" aria-labelledby="siteSubtitle" hidden>
+    <p class="transform-deck">Raw Clinical Data <span aria-hidden="true">→</span> Statistical Analysis <span aria-hidden="true">→</span> Research-Ready Results</p>
+    <div class="transform-flow">
+      <article class="transform-stage input-stage">
+        <div class="stage-kicker"><span>INPUT</span><span class="stage-index">01</span></div>
+        <h3>Your Data</h3>
+        <div class="sample-file-card">
+          <svg viewBox="0 0 32 36" aria-hidden="true"><path d="M6 2h13l8 8v22a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#fff" stroke="#cddbd3" stroke-width="1.5"/><path d="M19 2v7a2 2 0 0 0 2 2h6" fill="#edf5f0" stroke="#cddbd3" stroke-width="1.5"/><rect x="8" y="17" width="14" height="8" rx="2" fill="#e4f0e9"/><text x="15" y="23" text-anchor="middle">CSV</text></svg>
+          <div class="sample-file-copy"><span class="example-tag">EXAMPLE</span><strong>clinical_research.csv</strong><small>De-identified research dataset</small></div>
+        </div>
+        <div class="dataset-tags" aria-label="Example dataset contents"><span>Characteristics</span><span>Treatment groups</span><span>Clinical outcomes</span></div>
+        <label class="drop" id="drop" for="file">
+          <input type="file" id="file" aria-label="Choose a CSV or Excel file" aria-describedby="upload-guidance" accept=".csv,.xlsx,.xls,.xlsm,.xlsb,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+          <span><strong>Drop a CSV or Excel file</strong><small id="upload-guidance">or click to browse your device</small></span>
+        </label>
+        <p class="actions"><button type="button" id="sample" class="btn primary">Try sample data</button></p>
+      </article>
+
+      <div class="flow-connector" aria-hidden="true"><svg viewBox="0 0 32 18"><path d="M2 9h25m-7-6 7 6-7 6"/></svg></div>
+
+      <article class="transform-stage process-stage">
+        <div class="stage-kicker"><span>PROCESS</span><span class="stage-index">02</span></div>
+        <h3>Statistical Analysis</h3>
+        <p class="stage-summary">From data to discovery</p>
+        <div class="analysis-hub" aria-hidden="true">
+          <div class="hub-icon"><svg viewBox="0 0 32 32"><path d="M5 26V7m0 19h23M10 21v-6m6 6V9m6 12V5"/><path d="m7 13 8-5 6 2 7-6"/></svg></div>
+          <span>Analyze</span>
+        </div>
+        <div class="process-list">
+          <div><span class="process-mark">01</span><span>Organize variables</span></div>
+          <div><span class="process-mark">02</span><span>Compare research groups</span></div>
+          <div><span class="process-mark">03</span><span>Visualize findings</span></div>
+        </div>
+        <p class="stage-footnote">Statistical methods and visualization</p>
+      </article>
+
+      <div class="flow-connector" aria-hidden="true"><svg viewBox="0 0 32 18"><path d="M2 9h25m-7-6 7 6-7 6"/></svg></div>
+
+      <article class="transform-stage output-stage">
+        <div class="stage-kicker"><span>OUTPUT</span><span class="stage-index">03</span></div>
+        <h3>Research Outputs</h3>
+        <div class="output-list">
+          <article class="output-preview">
+            <div class="mini-table" aria-hidden="true"><div class="mini-table-head"><span>Characteristic</span><span>Overall</span></div><div><span>Age, years</span><span>54.2 ± 12</span></div><div><span>Women</span><span>68 (57%)</span></div><div><span>BMI</span><span>26.1 ± 4</span></div></div>
+            <div class="output-copy"><span class="output-type">TABLE 1 · SYNTHETIC</span><strong>Baseline characteristics</strong><small>Cohort summary</small></div>
+          </article>
+          <article class="output-preview">
+            <div class="mini-stat" aria-hidden="true"><span>GROUP COMPARISON</span><strong>Welch test</strong><b>p = 0.08</b></div>
+            <div class="output-copy"><span class="output-type">STATISTICS · SYNTHETIC</span><strong>Statistical results</strong><small>Methods and comparisons</small></div>
+          </article>
+          <article class="output-preview">
+            <div class="mini-figure" aria-hidden="true"><svg viewBox="0 0 96 50"><path d="M8 42h82M12 8v34"/><path d="M28 19v15m-7-8h14m-11-7h8m-8 15h8M57 13v22m-8-11h16m-12-8h8m-8 19h8"/><circle cx="77" cy="16" r="3"/><path d="M77 19v17m-7-8h14"/></svg></div>
+            <div class="output-copy"><span class="output-type">FIGURES · SYNTHETIC</span><strong>Research figures</strong><small>Distributions and groups</small></div>
+          </article>
+        </div>
+      </article>
+    </div>
+    <p class="transform-disclaimer">Illustrative workflow. Actual analyses depend on project scope and data.</p>
+  </section>
+  -->
+
+  <section id="landing" class="simple-upload-landing" aria-label="Upload" hidden>
     <label class="drop" id="drop" for="file">
       <input type="file" id="file" aria-label="Choose a CSV or Excel file" aria-describedby="upload-guidance" accept=".csv,.xlsx,.xls,.xlsm,.xlsb,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
       <strong>Drop a CSV or Excel file here, or click to choose a file</strong>
-      <span id="upload-guidance">Check that your data is clean, accurate, and consistently formatted before uploading.<br>The first row must contain column names; choose a worksheet if your Excel workbook has multiple sheets.</span>
+      <span id="upload-guidance"><span>Check that your data is clean, accurate, and consistently formatted before uploading.</span><br><span>The first row must contain column names; choose a worksheet if your Excel workbook has multiple sheets.</span></span>
     </label>
-    <p class="actions"><button type="button" id="sample" class="btn primary">Try sample data</button></p>
+    <p class="actions"><button type="button" id="sample" class="btn primary">Try the sample dataset (no file needed)</button></p>
   </section>
 
   <p id="status" class="status" role="status" aria-live="polite"></p>
@@ -57,8 +232,8 @@
       <h2 data-h tabindex="-1" class="sr">Choose a workspace</h2>
       <svg class="branch" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M50 0V50H0V100M50 50H100V100" fill="none" stroke="#aab3bf" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>
       <div class="paths">
-        <button type="button" class="path" data-view="tables"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M3 14h18M10 4v16"/></svg><strong>Tables</strong><span>Descriptive statistics and frequencies</span></button>
-        <button type="button" class="path" data-view="figures"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"/></svg><strong>Figures</strong><span>Histograms, box plots, bar charts, scatter plots</span></button>
+        <button type="button" class="path" data-view="tables"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M3 14h18M10 4v16"/></svg><strong>Tables</strong><span>Summarize variables, compare groups, and review missing data</span></button>
+        <button type="button" class="path" data-view="figures"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"/></svg><strong>Figures</strong><span>Create histograms, box plots, bar charts, or scatterplots</span></button>
       </div>
     </div>
 
@@ -67,7 +242,7 @@
 
     <section aria-labelledby="h-summary" class="summary-statistics-section">
       <div class="tables-section-heading">
-        <h2 id="h-summary">Summary statistics</h2>
+        <h2 id="h-summary">Variable summaries</h2>
         <details class="menu" id="exportMenu">
           <summary class="btn primary">Export</summary>
           <div class="menupanel">
@@ -128,18 +303,16 @@
           <tbody></tbody>
         </table>
       </div>
-      <!-- Summary statistics guidance temporarily disabled:
-      <p class="note">Select a continuous variable row for details and a box plot. Categorical rows show the selected counts and/or percentages. Continuous Auto is a heuristic, not a normality test.</p>
-      -->
+      <p class="note">Click a numeric-variable row to see details and a box plot. Auto uses a data-based rule to choose mean (SD) or median (IQR); it is not a formal normality test.</p>
     </section>
 
     <details class="section" open>
-      <summary>Summary table</summary>
+      <summary>Table 1: Cohort summary</summary>
       <div class="t1-control-layout">
         <section class="t1-control-group variable-selection-group" role="group" aria-labelledby="variableSelectionHeading">
           <h3 class="control-group-title" id="variableSelectionHeading">Variable selection</h3>
           <details class="menu" id="t1variablesMenu">
-            <summary class="btn" id="t1variablesLabel">Select variables</summary>
+            <summary class="btn" id="t1variablesLabel">Choose variables for Table 1</summary>
             <div class="menupanel t1-variable-panel">
               <div class="t1-variable-actions"><button type="button" class="btn" id="t1selectAll">Select all</button><button type="button" class="btn" id="t1selectNone">Clear all</button></div>
               <div id="t1variables" class="t1-variable-list" role="group" aria-label="Variables included in summary table"></div>
@@ -149,7 +322,7 @@
         <section class="t1-control-group table-configuration-group" role="group" aria-labelledby="tableConfigurationHeading">
           <h3 class="control-group-title" id="tableConfigurationHeading">Table configuration</h3>
           <div class="t1-configuration-controls">
-            <label class="t1-select-control" for="t1group"><span>Group by</span><select id="t1group" class="method"></select></label>
+            <label class="t1-select-control" for="t1group"><span>Group by (optional)</span><select id="t1group" class="method"></select></label>
             <label class="t1-select-control" for="t1testMode"><span>Continuous comparison</span>
               <select id="t1testMode" class="method" aria-label="Continuous comparison test mode">
                 <option value="parametric">Parametric (Welch)</option>
@@ -172,7 +345,8 @@
           </details>
         </section>
       </div>
-      <div class="tablewrap" data-output role="region" tabindex="0" aria-label="Scrollable summary table"><table id="t1" data-output><caption class="sr" data-output>Summary table</caption></table></div>
+      <p class="note table1-guide">To compare cohorts, choose a group column; leave Group by as None for an overall summary. Optional p-values are exploratory and do not measure clinical importance.</p>
+      <div class="tablewrap" data-output role="region" tabindex="0" aria-label="Scrollable summary table"><table id="t1" data-output><caption class="sr" data-output>Table 1: Cohort summary</caption></table></div>
       <ul id="t1notes" class="note" data-output></ul>
     </details>
 
@@ -245,7 +419,8 @@
         <div class="figtypes" id="figtypes" role="group" aria-label="Figure type"></div>
       </section>
       <section class="figure-step" id="figureDataStep" aria-labelledby="figureDataHeading">
-        <h3 class="figure-step-title" id="figureDataHeading">Configure data</h3>
+        <h3 class="figure-step-title" id="figureDataHeading">Choose columns to plot</h3>
+        <p class="note" id="figureDataHint">Your chart updates as you change selections.</p>
         <div class="figctl figure-controls" id="figctl"></div>
       </section>
       <details class="fig-text-settings" open>
@@ -295,15 +470,15 @@
   </section>
   -->
 
-  <footer class="privacy"><span>Files are processed locally in your browser and are not uploaded. Excel support loads the SheetJS parser from its CDN; workbook data stays on your device. Local processing alone does not ensure HIPAA or institutional compliance.</span><span class="copyright" data-raw>© <span id="copyrightYear">2026</span> Data Analysis Assistant</span></footer>
+  <footer class="privacy"><span>Files are processed locally in your browser and are not uploaded. Excel support loads the SheetJS parser from its CDN; workbook data stays on your device. Local processing alone does not ensure HIPAA or institutional compliance.</span><span class="copyright" data-raw>© <span id="copyrightYear">2026</span> Clinical Data Analysis Assistant</span></footer>
 </main>
 
 <dialog id="uploadConsentPrompt" aria-labelledby="uploadConsentTitle" aria-describedby="uploadConsentDescription">
-  <h2 id="uploadConsentTitle">Confirm data de-identification</h2>
-  <p id="uploadConsentDescription">Before this file is processed, confirm that it contains only de-identified information and no patient names, dates of birth, medical record numbers, contact information, or other direct identifiers. You are responsible for ensuring that you are authorized to use and upload this data.</p>
+  <h2 id="uploadConsentTitle">Confirm your file contains no direct identifiers</h2>
+  <p id="uploadConsentDescription">Before processing, confirm this file contains no patient names, dates of birth, medical record numbers, contact details, or other direct identifiers. You are responsible for confirming that you are authorized to use this de-identified data. Files are processed in your browser, not uploaded.</p>
   <div class="patient-actions upload-consent-actions">
     <button type="button" class="btn" id="uploadConsentCancel">No, cancel upload</button>
-    <button type="button" class="btn primary" id="uploadConsentConfirm">Yes, I confirm</button>
+    <button type="button" class="btn primary" id="uploadConsentConfirm">Confirm and process file</button>
   </div>
 </dialog>
 
@@ -317,14 +492,14 @@
 
 <dialog id="patientPrompt" aria-labelledby="patientTitle" aria-describedby="patientDescription">
   <div class="patient-prompt-heading">
-    <h2 id="patientTitle">Identify a patient ID column</h2>
+    <h2 id="patientTitle">Does your file have a participant ID column?</h2>
     <button type="button" class="patient-dialog-close" id="patientClose" aria-label="Close" title="Close"><span aria-hidden="true">×</span></button>
   </div>
-  <p id="patientDescription">A patient ID is a code, number, or label used to identify an individual patient. Does this file have one? Choose its column, then exclude it from summaries and figures; its values will also be hidden from the data preview.</p>
-  <label for="patientColumn">Patient ID column</label>
+  <p id="patientDescription">A participant ID is a code or label used to distinguish participants. If your file has one, select its column; it will be excluded from summaries and figures and hidden in the data preview. Otherwise, choose “No ID column.”</p>
+  <label for="patientColumn">Participant ID column</label>
   <select id="patientColumn" class="method"><option value="">Choose a column…</option></select>
   <p id="patientSuggestion" class="patient-suggestion" hidden></p>
-  <div class="patient-actions"><button type="button" class="btn primary" id="patientYes" disabled>Yes, exclude this column</button><button type="button" class="btn" id="patientNo">No patient ID</button></div>
+  <div class="patient-actions"><button type="button" class="btn primary" id="patientYes" disabled>Yes, exclude this column</button><button type="button" class="btn" id="patientNo">No ID column</button></div>
 </dialog>
 
 <dialog id="detail" aria-labelledby="dtitle">

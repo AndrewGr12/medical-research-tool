@@ -2,9 +2,9 @@
 'use strict';
 (() => {
   const rows = [
-    ['Data Analysis Assistant','Data Analysis Assistant','Data Analysis Assistant','Data Analysis Assistant'],
+    ['Clinical Data Analysis Assistant','Clinical Data Analysis Assistant','Clinical Data Analysis Assistant','Clinical Data Analysis Assistant'],
     ['Upload a CSV or Excel workbook to generate descriptive statistics.','Importez un fichier CSV ou Excel pour générer des statistiques descriptives.','Suba un archivo CSV o Excel para generar estadísticas descriptivas.','Загрузите файл CSV или Excel, чтобы получить описательную статистику.'],
-    ['Transform your clinical data into tables and visualizations!','Transformez vos données cliniques en tableaux et/ou graphiques exploitables.','¡Transforme sus datos clínicos en tablas y visualizaciones!','Преобразуйте клинические данные в таблицы и визуализации!'],
+    ['From Data to Discovery','Des données à la découverte','De los datos al descubrimiento','От данных к открытиям'],
     /* About page translation retained but inactive: ['About the Author','À propos de l’auteur','Acerca del autor','Об авторе'] */ ['Restart Analysis','Recommencer l’analyse','Reiniciar análisis','Начать анализ заново'],
     ['Upload','Importation','Carga de datos','Загрузка данных'], ['Drop a CSV or Excel file here, or click to choose a file','Glissez-déposez votre fichier CSV ou Excel ici, ou cliquez pour le parcourir.','Arrastre aquí un archivo CSV o Excel, o haga clic para seleccionarlo','Перетащите сюда файл CSV или Excel или нажмите, чтобы выбрать файл'],
     ['Check that your data is clean, accurate, and consistently formatted before uploading.','Pour des résultats fiables, assurez-vous que vos données sont complètes, exactes et structurées de manière cohérente.','Compruebe que los datos estén limpios, sean correctos y tengan un formato uniforme antes de cargarlos.','Перед загрузкой убедитесь, что данные чистые, точные и имеют единый формат.'],
@@ -60,6 +60,59 @@
     ['Table configuration','Configuration du tableau','Configuración de la tabla','Настройка таблицы']
   );
   rows.push(
+    ['From Data to Discovery','Des données à la découverte','De los datos al descubrimiento','От данных к открытиям'],
+    ['Raw Clinical Data','Données cliniques brutes','Datos clínicos sin procesar','Исходные клинические данные'],
+    ['Statistical Analysis','Analyse statistique','Análisis estadístico','Статистический анализ'],
+    ['Research-Ready Results','Résultats prêts pour la recherche','Resultados listos para la investigación','Результаты для научной работы'],
+    ['Your Data','Vos données','Sus datos','Ваши данные'],
+    ['EXAMPLE','EXEMPLE','EJEMPLO','ПРИМЕР'],
+    ['De-identified research dataset','Jeu de données de recherche dé-identifié','Conjunto de datos de investigación desidentificado','Обезличенный исследовательский набор данных'],
+    ['Characteristics','Caractéristiques','Características','Характеристики'],
+    ['Treatment groups','Groupes de traitement','Grupos de tratamiento','Группы лечения'],
+    ['Clinical outcomes','Résultats cliniques','Resultados clínicos','Клинические исходы'],
+    ['Drop a CSV or Excel file','Déposez un fichier CSV ou Excel','Suelte un archivo CSV o Excel','Перетащите файл CSV или Excel'],
+    ['or click to browse your device','ou cliquez pour parcourir votre appareil','o haga clic para buscar en su dispositivo','или нажмите, чтобы выбрать файл на устройстве'],
+    ['Try sample data','Essayer les données d’exemple','Probar datos de ejemplo','Попробовать пример данных'],
+    ['From data to discovery','Des données à la découverte','De los datos al descubrimiento','От данных к открытиям'],
+    ['Analyze','Analyser','Analizar','Анализировать'],
+    ['Organize variables','Organiser les variables','Organizar variables','Упорядочить переменные'],
+    ['Compare research groups','Comparer les groupes de recherche','Comparar grupos de investigación','Сравнить исследовательские группы'],
+    ['Visualize findings','Visualiser les résultats','Visualizar los hallazgos','Визуализировать результаты'],
+    ['Statistical methods and visualization','Méthodes statistiques et visualisation','Métodos estadísticos y visualización','Статистические методы и визуализация'],
+    ['Research Outputs','Résultats de recherche','Resultados de investigación','Результаты исследования'],
+    ['Baseline characteristics','Caractéristiques initiales','Características basales','Исходные характеристики'],
+    ['Cohort summary','Résumé de la cohorte','Resumen de la cohorte','Сводка по когорте'],
+    ['Group comparison','Comparaison des groupes','Comparación de grupos','Сравнение групп'],
+    ['Statistical results','Résultats statistiques','Resultados estadísticos','Статистические результаты'],
+    ['Methods and comparisons','Méthodes et comparaisons','Métodos y comparaciones','Методы и сравнения'],
+    ['Research figures','Figures de recherche','Figuras de investigación','Научные графики'],
+    ['Distributions and groups','Distributions et groupes','Distribuciones y grupos','Распределения и группы'],
+    ['Illustrative workflow. Actual analyses depend on project scope and data.','Flux de travail illustratif. Les analyses réelles dépendent du périmètre du projet et des données.','Flujo de trabajo ilustrativo. Los análisis reales dependen del alcance del proyecto y de los datos.','Пример рабочего процесса. Фактический анализ зависит от задач проекта и данных.'],
+    ['Prepare Your Clinical Data','Préparez vos données cliniques','Prepare sus datos clínicos','Подготовьте клинические данные'],
+    ['One row per participant','Une ligne par participant','Una fila por participante','Одна строка на участника'],
+    ['One column per variable','Une colonne par variable','Una columna por variable','Один столбец на переменную'],
+    ['Upload Your File','Importez votre fichier','Suba su archivo','Загрузите файл'],
+    ['Choose a de-identified CSV or Excel file','Choisissez un fichier CSV ou Excel dé-identifié','Elija un archivo CSV o Excel sin datos identificativos','Выберите обезличенный файл CSV или Excel'],
+    ['Analyze Your Data','Analysez vos données','Analice sus datos','Проанализируйте данные'],
+    ['Select variables and analysis options','Sélectionnez les variables et les options d’analyse','Seleccione las variables y las opciones de análisis','Выберите переменные и параметры анализа'],
+    ['Generate Results','Générez les résultats','Genere resultados','Сформируйте результаты'],
+    ['Create summary tables and figures','Créez des tableaux récapitulatifs et des graphiques','Cree tablas de resumen y figuras','Создайте сводные таблицы и графики'],
+    ['Examples of outputs you can create','Exemples de résultats que vous pouvez créer','Ejemplos de resultados que puede crear','Примеры результатов, которые можно создать'],
+    ['Identify','Identifier','Identificar','Определить'],
+    ['Patient Data Set','Données patient','Datos del paciente','Данные пациента'],
+    ['Analyze','Analyser','Analizar','Анализировать'],
+    ['Generate','Générer','Generar','Создать'],
+    ['Automated Statistics','Statistiques automatisées','Estadísticas automatizadas','Автоматическая статистика'],
+    ['Tables and Figures','Tableaux et graphiques','Tablas y figuras','Таблицы и графики'],
+    ['CSV or Excel','CSV ou Excel','CSV o Excel','CSV или Excel'],
+    ['Table','Tableau','Tabla','Таблица'],
+    ['Baseline characteristics','Caractéristiques initiales','Características basales','Исходные характеристики'],
+    ['Age · Sex · BMI · Comorbidities','Âge · Sexe · IMC · Comorbidités','Edad · Sexo · IMC · Comorbilidades','Возраст · Пол · ИМТ · Сопутствующие заболевания'],
+    ['Visualize your findings','Visualisez vos résultats','Visualice sus resultados','Визуализируйте результаты'],
+    ['Distributions · Comparisons','Distributions · Comparaisons','Distribuciones · Comparaciones','Распределения · Сравнения'],
+    ['Continue','Continuer','Continuar','Продолжить']
+  );
+  rows.push(
     ['Choose visualization','Choisir une visualisation','Elegir visualización','Выбрать визуализацию'],
     ['Configure data','Configurer les données','Configurar datos','Настроить данные'],
     ['Distributions','Distributions','Distribuciones','Распределения'],
@@ -72,6 +125,37 @@
     ['Before this file is processed, confirm that it contains only de-identified information and no patient names, dates of birth, medical record numbers, contact information, or other direct identifiers. You are responsible for ensuring that you are authorized to use and upload this data.','Avant le traitement de ce fichier, confirmez qu’il ne contient que des données dé-identifiées, sans nom de patient, date de naissance, numéro de dossier médical, coordonnées ni autre identifiant direct. Il vous appartient de vérifier que vous êtes autorisé à utiliser et à importer ces données.','Antes de procesar este archivo, confirme que solo contiene datos desidentificados y que no incluye nombres de pacientes, fechas de nacimiento, números de historia clínica, datos de contacto ni otros identificadores directos. Usted es responsable de comprobar que tiene autorización para usar y subir estos datos.','Перед обработкой этого файла подтвердите, что он содержит только обезличенные данные и не содержит имен пациентов, дат рождения, номеров медицинских карт, контактных данных или других прямых идентификаторов. Вы отвечаете за то, чтобы убедиться в наличии у вас разрешения на использование и загрузку этих данных.'],
     ['No, cancel upload','Non, annuler l’importation','No, cancelar la carga','Нет, отменить загрузку'],
     ['Yes, I confirm','Oui, je confirme','Sí, confirmo','Да, подтверждаю']
+  );
+  rows.push(
+    ['Continue to file upload','Continuer vers l’importation du fichier','Continuar a cargar el archivo','Перейти к загрузке файла'],
+    ['Try the sample dataset (no file needed)','Essayer le jeu de données d’exemple (sans fichier)','Probar el conjunto de datos de ejemplo (sin archivo)','Попробовать пример данных (без файла)'],
+    ['Summarize variables, compare groups, and review missing data','Résumer les variables, comparer les groupes et examiner les données manquantes','Resumir variables, comparar grupos y revisar datos faltantes','Сводные данные по переменным, сравнение групп и просмотр пропусков'],
+    ['Create histograms, box plots, bar charts, or scatterplots','Créer des histogrammes, des boîtes à moustaches, des diagrammes en barres ou des nuages de points','Crear histogramas, diagramas de caja, gráficos de barras o de dispersión','Создавайте гистограммы, диаграммы размаха, столбчатые диаграммы и диаграммы рассеяния'],
+    ['Variable summaries','Résumé des variables','Resúmenes de variables','Сводки по переменным'],
+    ['Table 1: Cohort summary','Tableau 1 : Résumé de la cohorte','Tabla 1: Resumen de la cohorte','Таблица 1: Сводка по когорте'],
+    ['Choose variables for Table 1','Choisir les variables du tableau 1','Elegir variables para la tabla 1','Выберите переменные для таблицы 1'],
+    ['Group by (optional)','Grouper par (facultatif)','Agrupar por (opcional)','Группировать по (необязательно)'],
+    ['To compare cohorts, choose a group column; leave Group by as None for an overall summary. Optional p-values are exploratory and do not measure clinical importance.','Pour comparer des cohortes, choisissez une colonne de groupe ; laissez « Grouper par » sur « Aucun » pour un résumé global. Les valeurs p facultatives sont exploratoires et ne mesurent pas l’importance clinique.','Para comparar cohortes, elija una columna de grupo; deje «Agrupar por» en «Ninguno» para obtener un resumen general. Los valores p opcionales son exploratorios y no miden la importancia clínica.','Чтобы сравнить когорты, выберите столбец группы; для общей сводки оставьте «Группировать по» без выбора. Дополнительные p-значения носят исследовательский характер и не отражают клиническую значимость.'],
+    ['Click a numeric-variable row to see details and a box plot. Auto uses a data-based rule to choose mean (SD) or median (IQR); it is not a formal normality test.','Cliquez sur une ligne de variable numérique pour afficher les détails et une boîte à moustaches. Le mode Auto choisit la moyenne (ET) ou la médiane (IIQ) selon une règle fondée sur les données ; ce n’est pas un test formel de normalité.','Haga clic en una fila de variable numérica para ver los detalles y un diagrama de caja. El modo automático elige la media (DE) o la mediana (RIC) mediante una regla basada en los datos; no es una prueba formal de normalidad.','Нажмите строку числовой переменной, чтобы увидеть подробности и диаграмму размаха. Автовыбор применяет правило на основе данных для выбора среднего (СО) или медианы (МКР); это не формальный тест на нормальность.'],
+    ['Choose columns to plot','Choisir les colonnes à représenter','Elegir las columnas que desea graficar','Выберите столбцы для построения графика'],
+    ['Your chart updates as you change selections.','Le graphique se met à jour lorsque vous modifiez vos choix.','El gráfico se actualiza al cambiar las selecciones.','График обновляется при изменении выбранных параметров.'],
+    ['Confirm your file contains no direct identifiers','Confirmez que votre fichier ne contient aucun identifiant direct','Confirme que el archivo no contiene identificadores directos','Подтвердите, что файл не содержит прямых идентификаторов'],
+    ['Before processing, confirm this file contains no patient names, dates of birth, medical record numbers, contact details, or other direct identifiers. You are responsible for confirming that you are authorized to use this de-identified data. Files are processed in your browser, not uploaded.','Avant le traitement, vérifiez que ce fichier ne contient aucun nom de patient, date de naissance, numéro de dossier médical, coordonnées ni autre identifiant direct. Il vous appartient de confirmer que vous êtes autorisé à utiliser ces données dé-identifiées. Les fichiers sont traités dans votre navigateur et ne sont pas téléversés.','Antes de procesarlo, confirme que el archivo no contiene nombres de pacientes, fechas de nacimiento, números de historia clínica, datos de contacto ni otros identificadores directos. Debe confirmar que está autorizado a usar estos datos desidentificados. Los archivos se procesan en su navegador; no se cargan.','Перед обработкой подтвердите, что файл не содержит имен пациентов, дат рождения, номеров медицинских карт, контактных данных или других прямых идентификаторов. Вы должны убедиться, что имеете право использовать эти обезличенные данные. Файлы обрабатываются в браузере и не загружаются на сервер.'],
+    ['Confirm and process file','Confirmer et traiter le fichier','Confirmar y procesar el archivo','Подтвердить и обработать файл'],
+    ['Does your file have a participant ID column?','Votre fichier contient-il une colonne d’identifiant de participant ?','¿Su archivo tiene una columna de ID del participante?','Есть ли в файле столбец с ID участника?'],
+    ['A participant ID is a code or label used to distinguish participants. If your file has one, select its column; it will be excluded from summaries and figures and hidden in the data preview. Otherwise, choose “No ID column.”','Un identifiant de participant est un code ou un libellé permettant de distinguer les participants. Si votre fichier en contient un, sélectionnez sa colonne : elle sera exclue des résumés et des graphiques, et masquée dans l’aperçu. Sinon, choisissez « Aucune colonne d’identifiant ».','Un ID del participante es un código o etiqueta que permite distinguir a cada participante. Si su archivo lo contiene, seleccione esa columna; se excluirá de los resúmenes y gráficos y se ocultará en la vista previa. Si no, elija «No hay columna de ID».','ID участника — это код или метка, позволяющая различать участников. Если в файле есть такой столбец, выберите его: он будет исключён из сводок и графиков и скрыт в предварительном просмотре. Если такого столбца нет, выберите «Нет столбца с ID».'],
+    ['Participant ID column','Colonne d’identifiant de participant','Columna de ID del participante','Столбец с ID участника'],
+    ['No ID column','Aucune colonne d’identifiant','No hay columna de ID','Нет столбца с ID'],
+    ['Show how values are distributed','Montrer la répartition des valeurs','Mostrar cómo se distribuyen los valores','Показать распределение значений'],
+    ['Choose one numeric column','Choisir une colonne numérique','Elija una columna numérica','Выберите один числовой столбец'],
+    ['Compare a numeric variable across groups','Comparer une variable numérique entre les groupes','Comparar una variable numérica entre grupos','Сравнить числовую переменную между группами'],
+    ['Choose one numeric column; grouping is optional','Choisir une colonne numérique ; le regroupement est facultatif','Elija una columna numérica; agrupar es opcional','Выберите один числовой столбец; группировка необязательна'],
+    ['Show counts or percentages by category','Afficher les effectifs ou pourcentages par catégorie','Mostrar recuentos o porcentajes por categoría','Показать количество или проценты по категориям'],
+    ['Choose one category column','Choisir une colonne catégorielle','Elija una columna categórica','Выберите один категориальный столбец'],
+    ['Show the relationship between two numeric variables','Montrer la relation entre deux variables numériques','Mostrar la relación entre dos variables numéricas','Показать взаимосвязь двух числовых переменных'],
+    ['Choose two numeric columns; grouping is optional','Choisir deux colonnes numériques ; le regroupement est facultatif','Elija dos columnas numéricas; agrupar es opcional','Выберите два числовых столбца; группировка необязательна'],
+    ['No category columns were detected. Try a histogram or box plot using a numeric column.','Aucune colonne catégorielle n’a été détectée. Essayez un histogramme ou une boîte à moustaches avec une colonne numérique.','No se detectaron columnas categóricas. Pruebe un histograma o un diagrama de caja con una columna numérica.','Категориальные столбцы не обнаружены. Попробуйте гистограмму или диаграмму размаха для числового столбца.'],
+    ['No numeric columns were detected. Try a bar chart using a category column.','Aucune colonne numérique n’a été détectée. Essayez un diagramme en barres avec une colonne catégorielle.','No se detectaron columnas numéricas. Pruebe un gráfico de barras con una columna categórica.','Числовые столбцы не обнаружены. Попробуйте столбчатую диаграмму для категориального столбца.']
   );
   const languages = ['en', 'fr', 'es', 'ru', 'ar'];
   const dict = Object.fromEntries(languages.map(l => [l, new Map()]));
@@ -96,7 +180,7 @@
     ['Before this file is processed, confirm that it contains only de-identified information and no patient names, dates of birth, medical record numbers, contact information, or other direct identifiers. You are responsible for ensuring that you are authorized to use and upload this data.','قبل معالجة هذا الملف، أكّد أنه يحتوي على بيانات منزوعة الهوية فقط، ولا يتضمن أسماء المرضى أو تواريخ الميلاد أو أرقام السجلات الطبية أو بيانات الاتصال أو أي معرّفات مباشرة أخرى. أنت مسؤول عن التأكد من حصولك على الإذن اللازم لاستخدام هذه البيانات ورفعها.'],
     ['No, cancel upload','لا، ألغِ الرفع'],
     ['Yes, I confirm','نعم، أؤكد'],
-    ['Data Analysis Assistant','مساعد تحليل البيانات'],
+    ['Clinical Data Analysis Assistant','مساعد تحليل البيانات السريرية'],
     ['Upload a CSV or Excel workbook to generate descriptive statistics.','قم بتحميل ملف CSV أو مصنف Excel لإنشاء الإحصاءات الوصفية.'],
     ['Transform your clinical data into tables and visualizations!','حوّل بياناتك السريرية إلى جداول ورسوم مرئية!'],
     ['Restart Analysis','إعادة بدء التحليل'], ['Upload','رفع ملف'],
@@ -167,15 +251,73 @@
   arabic.set('Show legend', 'إظهار وسيلة الإيضاح');
   arabic.set('Show linear trend line', 'إظهار خط الاتجاه الخطي');
   arabic.set('Show individual points', 'إظهار النقاط الفردية');
+  arabic.set('Analyze', 'تحليل');
+  arabic.set('Identify', 'تحديد');
+  arabic.set('Prepare Your Clinical Data', 'حضّر بياناتك السريرية');
+  arabic.set('One row per participant', 'صف واحد لكل مشارك');
+  arabic.set('One column per variable', 'عمود واحد لكل متغير');
+  arabic.set('Upload Your File', 'ارفع ملفك');
+  arabic.set('Choose a de-identified CSV or Excel file', 'اختر ملف CSV أو Excel منزوع الهوية');
+  arabic.set('Analyze Your Data', 'حلّل بياناتك');
+  arabic.set('Select variables and analysis options', 'اختر المتغيرات وخيارات التحليل');
+  arabic.set('Generate Results', 'أنشئ النتائج');
+  arabic.set('Create summary tables and figures', 'أنشئ جداول ملخصة ورسومًا بيانية');
+  arabic.set('Examples of outputs you can create', 'أمثلة على النتائج التي يمكنك إنشاؤها');
+  arabic.set('Patient Data Set', 'بيانات المريض');
+  arabic.set('Generate', 'إنشاء');
+  arabic.set('Automated Statistics', 'إحصاءات تلقائية');
+  arabic.set('Tables and Figures', 'جداول ورسوم بيانية');
+  arabic.set('CSV or Excel', 'CSV أو Excel');
+  arabic.set('Table', 'جدول');
+  arabic.set('Baseline characteristics', 'الخصائص الأساسية');
+  arabic.set('Age · Sex · BMI · Comorbidities', 'العمر · الجنس · مؤشر كتلة الجسم · الأمراض المصاحبة');
+  arabic.set('Visualize your findings', 'اعرض نتائجك بصريًا');
+  arabic.set('Distributions · Comparisons', 'التوزيعات · المقارنات');
+  arabic.set('Continue', 'متابعة');
+  arabic.set('Continue to file upload', 'متابعة إلى تحميل الملف');
+  arabic.set('Try the sample dataset (no file needed)', 'جرّب مجموعة البيانات النموذجية (لا يلزم ملف)');
+  arabic.set('Summarize variables, compare groups, and review missing data', 'لخّص المتغيرات، وقارن المجموعات، وراجع البيانات المفقودة');
+  arabic.set('Create histograms, box plots, bar charts, or scatterplots', 'أنشئ مدرجات تكرارية أو مخططات صندوقية أو شريطية أو مبعثرة');
+  arabic.set('Variable summaries', 'ملخصات المتغيرات');
+  arabic.set('Table 1: Cohort summary', 'الجدول 1: ملخص المجموعة');
+  arabic.set('Choose variables for Table 1', 'اختر متغيرات الجدول 1');
+  arabic.set('Group by (optional)', 'التجميع حسب (اختياري)');
+  arabic.set('To compare cohorts, choose a group column; leave Group by as None for an overall summary. Optional p-values are exploratory and do not measure clinical importance.', 'لمقارنة المجموعات، اختر عمودًا للتجميع؛ واترك التجميع بلا اختيار للحصول على ملخص إجمالي. قيم p الاختيارية استكشافية ولا تقيس الأهمية السريرية.');
+  arabic.set('Click a numeric-variable row to see details and a box plot. Auto uses a data-based rule to choose mean (SD) or median (IQR); it is not a formal normality test.', 'انقر على صف متغير رقمي لعرض التفاصيل والمخطط الصندوقي. يختار الوضع التلقائي المتوسط (SD) أو الوسيط (IQR) وفق قاعدة مستندة إلى البيانات؛ وليس اختبارًا رسميًا للتوزيع الطبيعي.');
+  arabic.set('Choose columns to plot', 'اختر الأعمدة لرسمها');
+  arabic.set('Your chart updates as you change selections.', 'يتحدث الرسم البياني عند تغيير اختياراتك.');
+  arabic.set('Confirm your file contains no direct identifiers', 'أكد أن ملفك لا يحتوي على معرّفات مباشرة');
+  arabic.set('Before processing, confirm this file contains no patient names, dates of birth, medical record numbers, contact details, or other direct identifiers. You are responsible for confirming that you are authorized to use this de-identified data. Files are processed in your browser, not uploaded.', 'قبل المعالجة، أكد أن الملف لا يحتوي على أسماء المرضى أو تواريخ الميلاد أو أرقام السجلات الطبية أو بيانات الاتصال أو أي معرّفات مباشرة أخرى. تأكد من أن لديك صلاحية استخدام هذه البيانات منزوعة الهوية. تُعالج الملفات في المتصفح ولا تُرفع إلى خادم.');
+  arabic.set('Confirm and process file', 'أكد معالجة الملف');
+  arabic.set('Does your file have a participant ID column?', 'هل يحتوي ملفك على عمود لمعرّف المشارك؟');
+  arabic.set('A participant ID is a code or label used to distinguish participants. If your file has one, select its column; it will be excluded from summaries and figures and hidden in the data preview. Otherwise, choose “No ID column.”', 'معرّف المشارك رمز أو تسمية لتمييز المشاركين. إذا كان ملفك يحتوي عليه، فاختر عموده؛ سيُستبعد من الملخصات والرسوم البيانية ويُخفى في معاينة البيانات. وإلا فاختر «لا يوجد عمود معرّف».');
+  arabic.set('Participant ID column', 'عمود معرّف المشارك');
+  arabic.set('No ID column', 'لا يوجد عمود معرّف');
+  arabic.set('Show how values are distributed', 'اعرض كيفية توزيع القيم');
+  arabic.set('Choose one numeric column', 'اختر عمودًا رقميًا واحدًا');
+  arabic.set('Compare a numeric variable across groups', 'قارن متغيرًا رقميًا بين المجموعات');
+  arabic.set('Choose one numeric column; grouping is optional', 'اختر عمودًا رقميًا واحدًا؛ والتجميع اختياري');
+  arabic.set('Show counts or percentages by category', 'اعرض الأعداد أو النسب المئوية حسب الفئة');
+  arabic.set('Choose one category column', 'اختر عمودًا فئويًا واحدًا');
+  arabic.set('Show the relationship between two numeric variables', 'اعرض العلاقة بين متغيرين رقميين');
+  arabic.set('Choose two numeric columns; grouping is optional', 'اختر عمودين رقميين؛ والتجميع اختياري');
+  arabic.set('No category columns were detected. Try a histogram or box plot using a numeric column.', 'لم يتم اكتشاف أعمدة فئوية. جرّب مدرجًا تكراريًا أو مخططًا صندوقيًا باستخدام عمود رقمي.');
+  arabic.set('No numeric columns were detected. Try a bar chart using a category column.', 'لم يتم اكتشاف أعمدة رقمية. جرّب مخططًا شريطيًا باستخدام عمود فئوي.');
   for (const key of outputOnlyKeys) arabic.delete(key);
   for (const [en, ar] of arabic) { dict.ar.set(en, ar); reverse.set(ar, en); }
   const localeTag = { en: 'en-US', fr: 'fr-FR', es: 'es-ES', ru: 'ru-RU', ar: 'en-US' };
   let current = 'en', selected = false;
+  let guideTimers = [];
+  let guideHasBeenShown = false;
   const sourceNodes = new WeakMap(), sourceAttrs = new WeakMap(), sourceDirs = new WeakMap(), outputDirs = new WeakMap();
   const preserve = el => Boolean(el && (el.matches?.('[data-output]') || el.closest?.('[data-output],[data-raw],.language-options,[data-locale]')));
   function dynamic(en, lang) {
     if (lang === 'en') return en;
-    if (lang === 'ar') return arabic.get(en) ?? en;
+    if (lang === 'ar') {
+      const m = en.match(/^Possible participant ID: “(.+)” \((\d+) unique non-missing values\)\. Select it if this column identifies participants; nothing is excluded until you confirm\.$/);
+      if (m) return `معرّف محتمل للمشارك: «${m[1]}» (${m[2]} قيمة فريدة غير مفقودة). اختر هذا العمود إذا كان يعرّف المشاركين؛ ولن يُستبعد شيء قبل التأكيد.`;
+      return arabic.get(en) ?? en;
+    }
     const fixed = dict[lang].get(en); if (fixed !== undefined) return fixed;
     const lowerType = { auto: 'Auto', numeric: 'Numeric', categorical: 'Categorical', excluded: 'Excluded', exclude: 'Exclude' }[en];
     if (lowerType) { const translated = dict[lang].get(lowerType); if (translated) return lang === 'en' ? en : translated.toLowerCase(); }
@@ -187,7 +329,7 @@
 [/^“(.+)” is empty and was skipped\.$/, (_,v) => ({fr:`« ${v} » est vide et a été ignorée.`,es:`“${v}” está vacía y se omitió.`,ru:`«${v}» пуста и пропущена.`}[lang])],
 [/^“(.+)” has (\d+)% missing values(?:, including non-numeric entries)?\.$/, (_,v,n) => ({fr:`« ${v} » contient ${n} % de valeurs manquantes.`,es:`“${v}” tiene un ${n} % de valores faltantes.`,ru:`В «${v}» пропущено ${n} % значений.`}[lang])],
 [/^“(.+)”: (\d+) non-numeric value\(s\) were counted as missing\.$/, (_,v,n) => ({fr:`« ${v} » : ${n} valeur(s) non numérique(s) comptée(s) comme manquante(s).`,es:`“${v}”: ${n} valor(es) no numérico(s) se contaron como faltantes.`,ru:`«${v}»: нечисловые значения (${n}) учтены как пропущенные.`}[lang])],
-[/^Possible patient ID: “(.+)” \((\d+) unique non-missing values\)\. Select it if appropriate\. Nothing is excluded until you choose the column and confirm\.$/, (_,v,n) => ({fr:`Identifiant patient possible : « ${v} » (${n} valeurs non manquantes uniques). Sélectionnez-le si nécessaire. Rien ne sera exclu avant confirmation.`,es:`Posible ID de paciente: “${v}” (${n} valores únicos no faltantes). Selecciónelo si corresponde. No se excluirá nada hasta confirmar.`,ru:`Возможный ID пациента: «${v}» (${n} уникальных непустых значений). Выберите его при необходимости. До подтверждения ничего не исключается.`}[lang])],
+[/^Possible participant ID: “(.+)” \((\d+) unique non-missing values\)\. Select it if this column identifies participants; nothing is excluded until you confirm\.$/, (_,v,n) => ({fr:`Identifiant de participant possible : « ${v} » (${n} valeurs renseignées uniques). Sélectionnez cette colonne si elle identifie les participants ; rien ne sera exclu avant confirmation.`,es:`Posible ID del participante: “${v}” (${n} valores únicos no faltantes). Seleccione esta columna si identifica a los participantes; no se excluirá nada hasta que confirme.`,ru:`Возможный ID участника: «${v}» (${n} уникальных непустых значений). Выберите этот столбец, если он идентифицирует участников; до подтверждения ничего не исключается.`}[lang])],
 [/^Continuous settings apply to all (\d+) numeric variables?; categorical settings apply to all (\d+) categorical variables?\.$/, (_,n,c) => ({fr:`Les paramètres continus s’appliquent aux ${n} variables numériques; les paramètres catégoriels aux ${c} variables catégorielles.`,es:`La configuración continua se aplica a las ${n} variables numéricas; la categórica, a las ${c} variables categóricas.`,ru:`Настройки непрерывных переменных применяются к ${n} числовым; категориальных — к ${c} категориальным переменным.`}[lang])],
 [/^Auto: (.+)$/, (_,a) => ({fr:`Auto : ${dynamic(a,lang)}`,es:`Auto: ${dynamic(a,lang)}`,ru:`Авто: ${dynamic(a,lang)}`}[lang])],
 [/^“(.+)” is constant\.$/, (_,v) => ({fr:`« ${v} » est constante.`,es:`“${v}” es constante.`,ru:`«${v}» — постоянная переменная.`}[lang])],
@@ -246,7 +388,7 @@
       else el.setAttribute('dir', originalDir);
     });
     root.querySelectorAll?.('*').forEach(el => { if (preserve(el)) return; let saved = sourceAttrs.get(el); if (!saved) { saved = {}; sourceAttrs.set(el,saved); } for (const a of attrs) if (el.hasAttribute(a)) { if (!(a in saved)) saved[a] = reverse.get(el.getAttribute(a)) || el.getAttribute(a); const val = text(saved[a]); if (val !== el.getAttribute(a)) el.setAttribute(a,val); } });
-    document.documentElement.lang = current; document.documentElement.dir = 'ltr'; document.title = text('Data Analysis Assistant');
+    document.documentElement.lang = current; document.documentElement.dir = 'ltr'; document.title = text('Clinical Data Analysis Assistant');
     document.querySelectorAll('[data-locale]').forEach(b => { const active = selected && b.dataset.locale === current; b.setAttribute('aria-pressed', String(active)); b.classList.toggle('selected', active); });
   }
   function replayLandingFade() {
@@ -258,24 +400,83 @@
     elements.forEach(el => { el.style.animation = 'none'; });
     elements.forEach(el => { void el.offsetWidth; el.style.removeProperty('animation'); });
   }
+  function showGuide() {
+    const guide = document.querySelector('.tool-guide');
+    const landing = document.getElementById('landing');
+    const subtitle = document.getElementById('siteSubtitle');
+    if (guide && guideHasBeenShown) {
+      guideTimers.forEach(clearTimeout);
+      guideTimers = [];
+      if (!guide.hidden) {
+        guide.classList.remove('guide-entering', 'guide-sequencing');
+        guide.classList.add('guide-complete');
+      }
+      return;
+    }
+    if (guide) {
+      guideHasBeenShown = true;
+      guideTimers.forEach(clearTimeout);
+      guideTimers = [];
+      guide.hidden = false;
+      guide.classList.remove('guide-entering');
+      guide.classList.add('guide-sequencing');
+      const steps = [...guide.querySelectorAll('.guide-step')];
+      const resultsStep = guide.querySelector('.workflow-results');
+      const examples = guide.querySelector('.guide-output-examples');
+      const actions = guide.querySelector('.guide-actions');
+      steps.forEach(step => step.classList.remove('is-visible', 'arrow-visible'));
+      examples?.classList.remove('is-visible');
+      actions?.classList.remove('is-visible');
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        steps.forEach(step => step.classList.add('is-visible', 'arrow-visible'));
+        resultsStep?.classList.add('arrow-visible');
+        examples?.classList.add('is-visible');
+        actions?.classList.add('is-visible');
+      } else {
+        void guide.offsetWidth;
+        requestAnimationFrame(() => steps[0]?.classList.add('is-visible'));
+        steps.forEach((step, index) => {
+          if (index > 0) guideTimers.push(setTimeout(() => step.classList.add('is-visible'), index * 667));
+          if (index < steps.length - 1) guideTimers.push(setTimeout(() => step.classList.add('arrow-visible'), index * 667 + 333));
+        });
+        const resultsArrowTime = Math.max(0, (steps.length - 1) * 667 + 333);
+        guideTimers.push(setTimeout(() => resultsStep?.classList.add('arrow-visible'), resultsArrowTime));
+        guideTimers.push(setTimeout(() => examples?.classList.add('is-visible'), resultsArrowTime + 300));
+        guideTimers.push(setTimeout(() => actions?.classList.add('is-visible'), resultsArrowTime + 650));
+      }
+    }
+    if (landing) landing.hidden = true;
+    if (subtitle) subtitle.hidden = true;
+  }
   function choose(lang) {
     current = languages.includes(lang) ? lang : 'en'; selected = true;
-    const landing = document.getElementById('landing'), subtitle = document.getElementById('siteSubtitle');
-    if (landing) landing.hidden = false; if (subtitle) subtitle.hidden = false;
+    showGuide();
     translatePage();
-    replayLandingFade();
     if (typeof window.onLocaleChange === 'function') window.onLocaleChange(current);
   }
   function selectLanguage(lang) {
-    const first = !selected; current = languages.includes(lang) ? lang : 'en'; selected = true;
-    const landing = document.getElementById('landing'), prompt = document.getElementById('languagePrompt'), subtitle = document.getElementById('siteSubtitle');
-    if (landing && first) landing.hidden = false; if (subtitle) subtitle.hidden = false;
-    translatePage(); replayLandingFade(); if (typeof window.onLocaleChange === 'function') window.onLocaleChange(current);
+    current = languages.includes(lang) ? lang : 'en'; selected = true;
+    showGuide();
+    translatePage();
+    if (typeof window.onLocaleChange === 'function') window.onLocaleChange(current);
   }
   function markSelected(lang) { current = lang; selected = true; }
   window.AppI18n = { text, translatePage, selectLanguage, markSelected, get language(){return current;}, get locale(){return localeTag[current];}, get selected(){return selected;} };
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-locale]').forEach(b => b.addEventListener('click', () => selectLanguage(b.dataset.locale)));
+    document.getElementById('guideContinue')?.addEventListener('click', () => {
+      const landing = document.getElementById('landing');
+      const subtitle = document.getElementById('siteSubtitle');
+      if (landing) landing.hidden = false;
+      if (subtitle) subtitle.hidden = false;
+      replayLandingFade();
+      document.getElementById('sample')?.focus();
+    });
+    /* Change-language button handler temporarily disabled:
+    document.getElementById('guideChangeLanguage')?.addEventListener('click', () => {
+      document.querySelector('[data-locale][aria-pressed="true"]')?.focus();
+    });
+    */
     translatePage();
     new MutationObserver(() => translatePage()).observe(document.body,{subtree:true,childList:true,characterData:true});
   });
