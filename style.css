@@ -375,9 +375,9 @@ dialog[open]::backdrop{animation:backdropIn .54s ease-in-out both}
 .guide-example-panels{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:18px 0 0;padding:14px 0 0;border-top:1px solid #e0e4e8}
 .guide-example-panel{display:flex;min-width:0;min-height:92px;flex-direction:column;align-items:center;justify-content:center;padding:7px 5px;border:1px solid #e2e9e5;border-radius:8px;background:#fbfdfb}
 .guide-example-panel svg{display:block;width:min(100%,110px);height:54px;overflow:visible}
-.guide-example-panel h3{margin:2px 0 0;color:#38594d;font-size:.78rem;font-weight:650;line-height:1.2;text-align:center}
+.guide-example-panel h3{margin:2px 0 0;color:#38594d;font-size:18px;font-weight:650;line-height:1.2;text-align:center}
 @media(max-width:760px){.guide-example-panels{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.guide-example-panel{min-height:86px}}
-@media(max-width:480px){.guide-example-panels{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px;padding-top:12px}.guide-example-panel{min-height:82px}.guide-example-panel h3{font-size:.75rem}}
+@media(max-width:480px){.guide-example-panels{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px;padding-top:12px}.guide-example-panel{min-height:82px}.guide-example-panel h3{font-size:18px}}
 .tool-guide .workflow-results::after{content:"↓";position:absolute;z-index:2;right:50%;bottom:-31px;transform:translateX(50%);color:#43806d;font-size:25px;font-weight:600;line-height:1;opacity:0;transition:opacity .3s ease}
 .tool-guide.guide-sequencing .workflow-results.arrow-visible::after{opacity:1}
 .tool-guide .guide-output-examples{margin-top:38px}
