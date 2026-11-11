@@ -48,6 +48,7 @@
     ['Figure text sizes','Tailles du texte des graphiques','Tamaños de texto de los gráficos','Размер текста на графиках'],
     ['Adjust text sizes for this figure. The preview updates as you move the sliders.','Ajustez la taille du texte de ce graphique. L’aperçu se met à jour lorsque vous déplacez les curseurs.','Ajuste el tamaño del texto de este gráfico. La vista previa se actualiza al mover los controles.','Настройте размер текста на графике. Предварительный просмотр обновляется при перемещении ползунков.'],
     ['Figure title','Titre de la figure','Título de la figura','Название рисунка'],
+    ['Show correlation coefficient','Afficher le coefficient de corrélation','Mostrar coeficiente de correlación','Показать коэффициент корреляции'],
     ['Axis titles','Titres des axes','Títulos de los ejes','Подписи осей'],
     ['Tick and category labels','Graduations et catégories','Marcas y categorías','Метки делений и категорий'],
     ['Legend labels','Libellés de la légende','Etiquetas de la leyenda','Подписи легенды'],
@@ -97,7 +98,7 @@
     ['Select variables and analysis options','Sélectionnez les variables et les options d’analyse','Seleccione las variables y las opciones de análisis','Выберите переменные и параметры анализа'],
     ['Generate Results','Générez les résultats','Genere resultados','Сформируйте результаты'],
     ['Create summary tables and figures','Créez des tableaux récapitulatifs et des graphiques','Cree tablas de resumen y figuras','Создайте сводные таблицы и графики'],
-    ['Examples of outputs you can create','Exemples de résultats que vous pouvez créer','Ejemplos de resultados que puede crear','Примеры результатов, которые можно создать'],
+    ['Examples of results you can create','Exemples de résultats que vous pouvez créer','Ejemplos de resultados que puede crear','Примеры результатов, которые можно создать'],
     ['Identify','Identifier','Identificar','Определить'],
     ['Patient Data Set','Données patient','Datos del paciente','Данные пациента'],
     ['Analyze','Analyser','Analizar','Анализировать'],
@@ -250,6 +251,7 @@
   arabic.set('Show gridlines', 'إظهار خطوط الشبكة');
   arabic.set('Show legend', 'إظهار وسيلة الإيضاح');
   arabic.set('Show linear trend line', 'إظهار خط الاتجاه الخطي');
+  arabic.set('Show correlation coefficient', 'إظهار معامل الارتباط');
   arabic.set('Show individual points', 'إظهار النقاط الفردية');
   arabic.set('Analyze', 'تحليل');
   arabic.set('Identify', 'تحديد');
@@ -262,7 +264,7 @@
   arabic.set('Select variables and analysis options', 'اختر المتغيرات وخيارات التحليل');
   arabic.set('Generate Results', 'أنشئ النتائج');
   arabic.set('Create summary tables and figures', 'أنشئ جداول ملخصة ورسومًا بيانية');
-  arabic.set('Examples of outputs you can create', 'أمثلة على النتائج التي يمكنك إنشاؤها');
+  arabic.set('Examples of results you can create', 'أمثلة على النتائج التي يمكنك إنشاؤها');
   arabic.set('Patient Data Set', 'بيانات المريض');
   arabic.set('Generate', 'إنشاء');
   arabic.set('Automated Statistics', 'إحصاءات تلقائية');

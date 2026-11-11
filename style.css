@@ -211,6 +211,9 @@ td.ind{padding-left:28px}
 .figtype svg{flex:0 0 24px;width:24px;height:24px}
 .figtype strong{min-width:0;overflow-wrap:anywhere}
 .figure-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:0;padding:14px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
+.figure-controls.is-scatter{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px 12px}
+.fig-scatter-options{grid-column:span 2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:center;gap:3px 8px}
+.fig-scatter-options .fig-check{min-width:0;font-size:.84rem}
 .fig-field{display:flex;min-width:0;flex-direction:column;gap:5px;color:var(--mute);font-size:.9rem;font-weight:600}
 .fig-field select{width:100%;min-height:42px;padding:6px 9px;font-size:.95rem}
 .fig-field input[type=text],.fig-field input[type=number]{width:100%;min-height:42px;padding:6px 9px;border:1px solid #b5bdc8;border-radius:4px;font:inherit}
@@ -324,11 +327,14 @@ html[lang="ar"] .fig-field{text-align:right}
 @media(max-width:600px){
   .figure-step{margin:12px 0 16px}
   .figure-controls{grid-template-columns:minmax(0,1fr);padding:12px}
+  .figure-controls.is-scatter{grid-template-columns:minmax(0,1fr)}
+  .fig-scatter-options{grid-column:auto;grid-template-columns:repeat(2,minmax(0,1fr))}
   .fig-text-grid{grid-template-columns:minmax(0,1fr);gap:10px;padding:10px 12px 14px}
   .figwrap{min-height:320px;padding:8px}
   .figure-actions{display:grid;grid-template-columns:1fr 1fr}
   .figure-actions #figureExportMenu>.btn,.figure-actions>#figreset{width:100%}
 }
+@media(min-width:601px) and (max-width:1000px){.figure-controls.is-scatter{grid-template-columns:repeat(3,minmax(0,1fr))}.fig-scatter-options{grid-column:span 3}}
 @media(max-width:600px){.paths{grid-template-columns:1fr}.branch{display:none}/* About page responsive styles retained: .author-card{flex-direction:column;align-items:flex-start;padding:16px}.author-photo{width:150px;height:180px}.about-heading{align-items:flex-start;flex-direction:column} */}
 @media(max-width:720px){.cat-settings{grid-template-columns:1fr}.cat-setting select{max-width:60%}}
 
