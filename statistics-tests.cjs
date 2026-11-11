@@ -35,7 +35,8 @@ const holm = holmAdjust([{ p: 0.01 }, { p: 0.04 }, { p: 0.03 }, { p: null }]);
 near(holm[0].adjusted, 0.03); near(holm[1].adjusted, 0.06); near(holm[2].adjusted, 0.06); assert.equal(holm[3].adjusted, null);
 assert.equal(figurePText(7e-6), '7.00e−6');
 const boxTest = boxPlotTests([{ v: [1, 2, 3] }, { v: [4, 5, 6] }, { v: [7, 8, 9] }], { showP: true, testMode: 'nonparametric' });
-assert.match(boxTest.annotations, /Kruskal–Wallis/); assert.equal('pairs' in boxTest, false, 'box plots show only the overall p-value');
+assert.match(boxTest.annotations, /Kruskal–Wallis/); assert.equal(boxTest.pairs.length, 3, 'box plots include every pairwise group comparison');
+assert.ok(boxTest.pairs.every(pair => pair.test.adjusted !== undefined), 'box-plot pairwise p-values include Holm adjustment');
 
 // Sparse 2x2 table: standard two-sided Fisher exact reference example.
 const fisherReference = fisher2x2([[1, 9], [11, 3]]);

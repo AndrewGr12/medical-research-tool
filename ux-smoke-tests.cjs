@@ -275,8 +275,8 @@ for (const edge of ['top','left','bottom','right','insideH','insideV']) assert.o
 assert.ok((docxBytes.match(/<w:tc>/g) || []).length >= 4, 'Word export contains individual table cells');
 
 assert.match(js, /function boxPlotTests\(groups, f\)/, 'box plots have an isolated group-test annotation helper');
-assert.doesNotMatch(js, /data-f="showPairwise"/, 'Holm pairwise p-value controls are commented out');
-assert.doesNotMatch(js, /test\.pairs\.forEach/, 'pairwise p-value brackets are disabled');
+assert.doesNotMatch(js, /data-f="showPairwise"/, 'pairwise comparisons use the existing p-value toggle');
+assert.match(js, /function boxPairLevels\(pairs\)/, 'box-plot pairwise p-values are assigned non-overlapping bracket levels');
 assert.doesNotMatch(js, /tx\('Group order'\)|data-f="showPoints"/, 'box-plot group-order and individual-point controls are commented out');
 assert.ok(js.indexOf("tx('Show p-values')") < js.indexOf("tx('Statistical test')"), 'p-value and test controls occupy the first two box-specific control slots');
 assert.match(js, /data-f="binRule"/, 'histograms expose automatic binning rules');

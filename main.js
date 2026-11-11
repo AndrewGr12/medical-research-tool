@@ -863,7 +863,23 @@ function boxPlotTests(groups, f) {
   const mode = f.testMode === 'nonparametric' ? 'nonparametric' : 'parametric';
   const global = selectComparisonTest('numeric', groups.map(g => g.v), mode);
   const label = global.p === null ? `${global.method}: NA` : `${global.method}, p = ${figurePText(global.p)}`;
-  return { annotations: label, global, note: `${global.method}${global.p === null ? ` unavailable: ${global.reason}` : `, p = ${figurePText(global.p)}`}.` };
+  const rawPairs = [];
+  for (let i = 0; i < groups.length; i++) for (let j = i + 1; j < groups.length; j++) {
+    rawPairs.push({ i, j, test: selectComparisonTest('numeric', [groups[i].v, groups[j].v], mode) });
+  }
+  const adjusted = holmAdjust(rawPairs.map(pair => pair.test));
+  const pairs = rawPairs.map((pair, i) => ({ ...pair, test: adjusted[i] }));
+  const pairNotes = pairs.map(pair => `${groups[pair.i].label} vs ${groups[pair.j].label}: ${pair.test.method}${pair.test.adjusted === null ? ` unavailable (${pair.test.reason})` : `, Holm-adjusted p = ${figurePText(pair.test.adjusted)}`}`).join('; ');
+  return { annotations: label, global, pairs, note: `Overall ${global.method}${global.p === null ? ` unavailable: ${global.reason}` : `, p = ${figurePText(global.p)}`}. Pairwise p-values use Holm adjustment across all group combinations. ${pairNotes}.` };
+}
+function boxPairLevels(pairs) {
+  const levelEnds = [];
+  return [...pairs].sort((a, b) => (a.j - a.i) - (b.j - b.i) || a.i - b.i).map(pair => {
+    let level = levelEnds.findIndex(end => end < pair.i);
+    if (level < 0) level = levelEnds.length;
+    levelEnds[level] = pair.j;
+    return { ...pair, level };
+  }).sort((a, b) => a.i - b.i || a.j - b.j);
 }
 function meanVariance(x) {
   const n = x.length, mean = x.reduce((a, b) => a + b, 0) / n;
@@ -1298,8 +1314,8 @@ function figBox(f) {
   groups = groups.filter(x => x.v.length);
   if (!groups.length) return { msg: 'No valid observations for this selection.' };
   const all = groups.flatMap(x => x.v), lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo || 1) * 0.06;
-  const test = g ? boxPlotTests(groups, f) : { note: '' };
-  const d = { W: 640, H: 400 + (test.annotations ? 45 : 0), l: 62, r: 20, t: test.annotations ? 80 : 40, b: 70 }, colors = palette(), groupColor = (G, i) => f.groupColors?.[g?.name]?.[G.label] || colors[i % colors.length], legend = g ? buildFigureLegend(groups.map((G, i) => ({ label: G.label, color: groupColor(G, i) })), 'box', displayVariableName(g.name)) : null, sy = lin(lo - pad, hi + pad, d.H - d.b, d.t), bw = (d.W - d.l - d.r) / groups.length, bx = Math.min(60, bw * 0.5);
+  const test = g ? boxPlotTests(groups, f) : { note: '' }, pairAnnotations = boxPairLevels(test.pairs || []), globalY = Math.max(50, figTextSize('title') + 24), pairStartY = globalY + 36, plotTop = test.annotations ? pairStartY + pairAnnotations.length * 24 + 12 : 40;
+  const d = { W: 640, H: 400 + Math.max(0, plotTop - 40), l: 62, r: 20, t: plotTop, b: 70 }, colors = palette(), groupColor = (G, i) => f.groupColors?.[g?.name]?.[G.label] || colors[i % colors.length], legend = g ? buildFigureLegend(groups.map((G, i) => ({ label: G.label, color: groupColor(G, i) })), 'box', displayVariableName(g.name)) : null, sy = lin(lo - pad, hi + pad, d.H - d.b, d.t), bw = (d.W - d.l - d.r) / groups.length, bx = Math.min(60, bw * 0.5);
   const body = groups.map((G, i) => {
     const s = computeStats(G.v), lf = s.q1 - 1.5 * s.iqr, hf = s.q3 + 1.5 * s.iqr, inside = G.v.filter(x => x >= lf && x <= hf), cx = d.l + (i + 0.5) * bw, col = g ? groupColor(G, i) : colors[0];
     const wl = Math.min(...inside), wh = Math.max(...inside);
@@ -1308,7 +1324,14 @@ function figBox(f) {
       + (g ? T(cx, d.H - d.b + 16, cut(G.label, 12), 'middle', '#1d2430', figTextSize('tick')) : '') + T(cx, d.H - d.b + (g ? 36 : 16), `n=${G.v.length}`, 'middle', '#5b6573', figTextSize('value'));
   }).join('');
   let ax = yAx(d, sy, niceTicks(lo - pad, hi + pad)) + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
-  if (test.annotations) ax += T(d.l, 26, test.annotations, 'start', '#1d2430', figTextSize('value'));
+  if (test.annotations) {
+    ax += T(d.W / 2, globalY, `Overall: ${test.annotations}`, 'middle', '#1d2430', figTextSize('value'));
+    pairAnnotations.forEach(pair => {
+      const x1 = d.l + (pair.i + 0.5) * bw, x2 = d.l + (pair.j + 0.5) * bw, y = pairStartY + pair.level * 24, p = pair.test.adjusted === null ? 'NA' : figurePText(pair.test.adjusted);
+      const details = `${groups[pair.i].label} vs ${groups[pair.j].label}: ${pair.test.method}; Holm-adjusted p = ${p}${pair.test.adjusted === null ? `; ${pair.test.reason}` : ''}`;
+      ax += `<g><title>${esc(details)}</title><path d="M${x1} ${y + 7}V${y}H${x2}V${y + 7}" fill="none" stroke="#5b6573" stroke-width="1.2"/>${T((x1 + x2) / 2, y - 5, `p = ${p}`, 'middle', '#1d2430', figTextSize('value'))}</g>`;
+    });
+  }
   return done(frame(d, ax + body, g ? `${cut(displayVariableName(r.name), 30)} by ${cut(displayVariableName(g.name), 25)}` : cut(displayVariableName(r.name), 60), g ? displayVariableName(g.name) : '', displayVariableName(r.name), legend), d,
     `Box plot of ${displayVariableName(r.name)}${g ? ` by ${displayVariableName(g.name)}` : ''}: n = ${all.length} plotted. Box = Q1–Q3 (R type 7) with median line; whiskers reach the most extreme values within 1.5×IQR; circles beyond are outliers and are not removed. Excluded: ${r.nums.length - r.nums.filter(x => x !== null).length} missing/non-numeric${g ? `; ${excl} with missing group; ${hiddenObs} in ${hiddenLv} less frequent level(s) not shown (max 12 groups). ${test.note || ''}${f.showP ? ' P-values are exploratory, compare independent groups, and use complete observations.' : ''}` : ''}.`, Boolean(legend));
 }
@@ -1377,7 +1400,7 @@ function figRefresh() {
   const legendDisabled = f.type === 'box' && !f.g;
   const common = `<label class="fig-field"><span>${tx('Palette')}</span><select class="method" data-f="palette"><option value="colorblind"${f.palette === 'colorblind' ? ' selected' : ''}>${tx('Color-blind friendly')}</option><option value="classic"${f.palette === 'classic' ? ' selected' : ''}>${tx('Classic')}</option><option value="vibrant"${f.palette === 'vibrant' ? ' selected' : ''}>${tx('Vibrant')}</option></select></label>${(f.type === 'box' && f.g) || (f.type === 'scatter' && f.g) ? '' : `<label class="fig-field"><span>${tx('Color')}</span><input data-f="color" type="color" value="${/^#[0-9a-f]{6}$/i.test(f.color || '') ? f.color : '#0072b2'}"></label>`}<label class="fig-field"><span>${tx('Figure title')}</span><input class="method" data-f="title" type="text" maxlength="100" value="${esc(f.title || '')}" placeholder="${tx('Use default title')}"></label><label class="fig-field"><span>${tx('X-axis title')}</span><input class="method" data-f="xLabel" type="text" maxlength="80" value="${esc(f.xLabel || '')}" placeholder="${tx('Use default label')}"></label><label class="fig-field"><span>${tx('Y-axis title')}</span><input class="method" data-f="yLabel" type="text" maxlength="80" value="${esc(f.yLabel || '')}" placeholder="${tx('Use default label')}"></label>${f.type === 'scatter' ? `<div class="fig-scatter-options"><label class="fig-field fig-check"><input type="checkbox" data-f="showGrid"${f.showGrid !== false ? ' checked' : ''}><span>${tx('Show gridlines')}</span></label><label class="fig-field fig-check"><input type="checkbox" data-f="showLegend"${f.showLegend !== false ? ' checked' : ''}${legendDisabled ? ' disabled aria-disabled="true"' : ''}><span>${tx('Show legend')}</span></label><label class="fig-field fig-check"><input type="checkbox" data-f="showTrend"${f.showTrend ? ' checked' : ''}><span>${tx('Show linear trend line')}</span></label><label class="fig-field fig-check"><input type="checkbox" data-f="showCorrelation"${f.showCorrelation ? ' checked' : ''}><span>${tx('Show correlation coefficient')}</span></label></div>` : `<label class="fig-field fig-check"><input type="checkbox" data-f="showGrid"${f.showGrid !== false ? ' checked' : ''}><span>${tx('Show gridlines')}</span></label>${['box'].includes(f.type) ? `<label class="fig-field fig-check${legendDisabled ? ' is-disabled' : ''}"><input type="checkbox" data-f="showLegend"${f.showLegend !== false ? ' checked' : ''}${legendDisabled ? ' disabled aria-disabled="true"' : ''}><span>${tx('Show legend')}</span></label>` : ''}`}`;
   const styleControls = `<label class="fig-field"><span>${tx('Opacity')}</span><input data-f="opacity" type="range" min="0.2" max="1" step="0.05" value="${f.opacity ?? 0.75}"></label><label class="fig-field"><span>${tx(f.type === 'scatter' ? 'Point size' : 'Outlier size')}</span><input data-f="pointSize" type="range" min="1" max="8" step="0.5" value="${f.pointSize || 3}"></label>`;
-  /* Group order, individual points, and Holm-adjusted pairwise p-value controls are intentionally commented out per request. */
+  /* Group order and individual-point controls remain intentionally disabled. */
   const boxControls = f.type === 'box' ? `<label class="fig-field fig-check"><input type="checkbox" data-f="showP"${f.showP ? ' checked' : ''}${f.g ? '' : ' disabled'}><span>${tx('Show p-values')}</span></label><label class="fig-field"><span>${tx('Statistical test')}</span><select class="method" data-f="testMode"${f.g ? '' : ' disabled'}><option value="nonparametric"${f.testMode === 'nonparametric' ? ' selected' : ''}>${tx('Nonparametric (Kruskal–Wallis / Mann–Whitney)')}</option><option value="parametric"${f.testMode === 'parametric' ? ' selected' : ''}>${tx('Parametric (Welch ANOVA / Welch t-test)')}</option></select></label>` : '';
   let groupColorControls = '';
   if (f.type === 'box' && f.g) { const gv = catVar(f.g), rv = numVar(f.x); if (gv && rv) groupColorControls = figureGroupColorMarkup(gv.name, boxGroupLabels(rv, gv, f), f, tx); }
