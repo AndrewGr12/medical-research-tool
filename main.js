@@ -898,7 +898,10 @@ function boxPlotTests(groups, f) {
   const adjusted = holmAdjust(rawPairs.map(pair => pair.test));
   const pairs = rawPairs.map((pair, i) => ({ ...pair, test: adjusted[i] }));
   const pairNotes = pairs.map(pair => `${groups[pair.i].label} vs ${groups[pair.j].label}: ${pair.test.method}${pair.test.adjusted === null ? ` unavailable (${pair.test.reason})` : `, Holm-adjusted p = ${figurePText(pair.test.adjusted)}`}`).join('; ');
-  return { annotations: label, global, pairs, note: `Overall ${global.method}${global.p === null ? ` unavailable: ${global.reason}` : `, p = ${figurePText(global.p)}`}. Pairwise p-values use Holm adjustment across all group combinations. ${pairNotes}.` };
+  const note = groups.length === 2
+    ? `${pairNotes}.`
+    : `Overall ${global.method}${global.p === null ? ` unavailable: ${global.reason}` : `, p = ${figurePText(global.p)}`}. Pairwise p-values use Holm adjustment across all group combinations. ${pairNotes}.`;
+  return { annotations: label, global, pairs, note };
 }
 function boxPairLevels(pairs) {
   const levelEnds = [];
@@ -1346,7 +1349,9 @@ function figBox(f) {
   groups = groups.filter(x => x.v.length);
   if (!groups.length) return { msg: 'No valid observations for this selection.' };
   const all = groups.flatMap(x => x.v), lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo || 1) * 0.06;
-  const test = g ? boxPlotTests(groups, f) : { note: '' }, pairAnnotations = boxPairLevels(test.pairs || []), globalY = Math.max(50, figTextSize('title') + 24), pairStartY = globalY + 36, plotTop = test.annotations ? pairStartY + pairAnnotations.length * 24 + 12 : 40;
+  const test = g ? boxPlotTests(groups, f) : { note: '' }, pairAnnotations = boxPairLevels(test.pairs || []);
+  const hideDuplicateOverall = groups.length === 2 && pairAnnotations.length === 1 && Number.isFinite(test.global?.p) && Number.isFinite(pairAnnotations[0].test.adjusted);
+  const showOverall = Boolean(test.annotations) && !hideDuplicateOverall, globalY = Math.max(50, figTextSize('title') + 24), pairStartY = globalY + (showOverall ? 36 : 24), plotTop = test.annotations ? pairStartY + pairAnnotations.length * 24 + 12 : 40;
   const d = { W: 640, H: 400 + Math.max(0, plotTop - 40), l: 62, r: 20, t: plotTop, b: 70 }, colors = palette(), groupColor = (G, i) => f.groupColors?.[g?.name]?.[G.label] || colors[i % colors.length], legend = g ? buildFigureLegend(groups.map((G, i) => ({ label: G.label, color: groupColor(G, i) })), 'box', displayVariableName(g.name)) : null, sy = lin(lo - pad, hi + pad, d.H - d.b, d.t), bw = (d.W - d.l - d.r) / groups.length, bx = Math.min(60, bw * 0.5);
   const body = groups.map((G, i) => {
     const s = computeStats(G.v), lf = s.q1 - 1.5 * s.iqr, hf = s.q3 + 1.5 * s.iqr, inside = G.v.filter(x => x >= lf && x <= hf), cx = d.l + (i + 0.5) * bw, col = g ? groupColor(G, i) : colors[0];
@@ -1357,7 +1362,7 @@ function figBox(f) {
   }).join('');
   let ax = yAx(d, sy, niceTicks(lo - pad, hi + pad)) + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
   if (test.annotations) {
-    ax += T(d.W / 2, globalY, `Overall: ${test.annotations}`, 'middle', '#1d2430', figTextSize('value'));
+    if (showOverall) ax += T(d.W / 2, globalY, `Overall: ${test.annotations}`, 'middle', '#1d2430', figTextSize('value'));
     pairAnnotations.forEach(pair => {
       const x1 = d.l + (pair.i + 0.5) * bw, x2 = d.l + (pair.j + 0.5) * bw, y = pairStartY + pair.level * 24, p = pair.test.adjusted === null ? 'NA' : figurePText(pair.test.adjusted);
       const details = `${groups[pair.i].label} vs ${groups[pair.j].label}: ${pair.test.method}; Holm-adjusted p = ${p}${pair.test.adjusted === null ? `; ${pair.test.reason}` : ''}`;

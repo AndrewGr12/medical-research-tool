@@ -220,6 +220,10 @@ const localeSnapshots = vm.runInContext(`(() => {
       figBar({ c: state.t1.group, mode: 'count' }),
       figScatter({ x: state.results[0].name, y: state.results[1].name, g: state.t1.group })
     ];
+    state.fig = { type: 'box', x: state.results[0].name, g: 'Sex', showP: true, testMode: 'nonparametric' };
+    const twoGroupPFigure = figBox({ x: state.results[0].name, g: 'Sex', showP: true, testMode: 'nonparametric' });
+    state.fig = { type: 'box', x: state.results[0].name, g: 'Treatment', showP: true, testMode: 'nonparametric' };
+    const multiGroupPFigure = figBox({ x: state.results[0].name, g: 'Treatment', showP: true, testMode: 'nonparametric' });
     const figureConfigViews = ['hist','box','bar','scatter'].map(type => {
       state.fig = { type, x: state.results[0].name, y: state.results[1].name, c: state.t1.group, g: state.t1.group, mode: 'count' };
       figRefresh();
@@ -233,7 +237,7 @@ const localeSnapshots = vm.runInContext(`(() => {
     const compactLegend = buildFigureLegend([{ label: '0', color: '#0072B2' }, { label: '1', color: '#E69F00' }], 'circle', 'diuretic use');
     state.fig.textSizes.legend = priorLegendSize;
     const csv = rows => rows.map(row => row.map(csvCell).join(',')).join('\\r\\n');
-    return JSON.stringify({ summary, table1, missingSummary, matrix, figures, barFigureHeight: figures[2].h, barLevelCount: Math.min(15, state.categorical.find(c => c.name === state.t1.group).freq.size), figureConfigViews, figureTypeCards, expandedLegend, compactLegend, longLegendText, summaryCsv: csv(summary), table1Csv: csv(matrix),
+    return JSON.stringify({ summary, table1, missingSummary, matrix, figures, twoGroupPFigure, multiGroupPFigure, barFigureHeight: figures[2].h, barLevelCount: Math.min(15, state.categorical.find(c => c.name === state.t1.group).freq.size), figureConfigViews, figureTypeCards, expandedLegend, compactLegend, longLegendText, summaryCsv: csv(summary), table1Csv: csv(matrix),
       summaryTsv: summary.map(row => row.map(tsvCell).join('\\t')).join('\\r\\n'),
       summaryDocx: Array.from(summaryDocx()), table1Docx: Array.from(table1Docx()) });
   });
@@ -246,6 +250,11 @@ assert.ok(figureSnapshot.expandedLegend.svg.includes(figureSnapshot.longLegendTe
 assert.doesNotMatch(figureSnapshot.expandedLegend.svg, /…/, 'long legend labels are not truncated');
 assert.ok(figureSnapshot.compactLegend.width >= 96, 'short category legends retain enough width for readable spacing');
 assert.doesNotMatch(figureSnapshot.compactLegend.svg, /textLength|lengthAdjust/, 'legend titles and labels use natural SVG text width instead of being compressed or stretched');
+assert.doesNotMatch(figureSnapshot.twoGroupPFigure.svg, /Overall:/, 'two-group box plots omit a redundant overall p-value annotation');
+assert.match(figureSnapshot.twoGroupPFigure.svg, /p = /, 'two-group box plots retain their single pairwise bracket p-value');
+assert.doesNotMatch(figureSnapshot.twoGroupPFigure.desc, /Overall (Mann|Wilcoxon|Welch)/, 'two-group figure details do not repeat the same overall test');
+assert.match(figureSnapshot.twoGroupPFigure.desc, /Holm-adjusted p = /, 'two-group figure details retain the pairwise test method and p-value');
+assert.match(figureSnapshot.multiGroupPFigure.svg, /Overall:/, 'multi-group box plots retain their overall test annotation');
 const expectedFigureControls = { hist: ['figx'], box: ['figx', 'figg'], bar: ['figc', 'figmode'], scatter: ['figx', 'figy', 'figg'] };
 for (const view of figureSnapshot.figureConfigViews) {
   for (const id of expectedFigureControls[view.type]) assert.match(view.controls, new RegExp(`id="${id}"`), `${view.type} exposes its supported control #${id}`);
