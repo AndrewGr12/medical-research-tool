@@ -175,6 +175,17 @@
     'Grouped Table 1: summaries are descriptive by default. Optional p-values are exploratory, unadjusted, and should not be used to assess baseline balance or clinical importance. They compare independent groups using complete observations; missing group labels are excluded. Welch tests compare means. Mann–Whitney U and Kruskal–Wallis compare rank distributions, not specifically medians. Categorical variables use one association test; sparse tables use exact tests when feasible. No multiplicity adjustment is applied. Review assumptions and study design before interpreting or publishing results.',
     'Missing = blank, NA, N/A, NaN, null, missing, “.” or “-”. In columns analyzed as numeric, non-numeric entries are also counted as missing and excluded from numeric summaries and comparisons. Per-variable non-missing N is shown in Table 1.'
   ]);
+  rows.push(
+    ['Select categorical/grouping variables','Sélectionner les variables catégorielles/de regroupement','Seleccione las variables categóricas/de agrupación','Выберите категориальные переменные и переменные группировки'],
+    ['Select all variables that represent categories or groups, including binary codes such as 0/1. These variables will be analyzed as categorical. Leave continuous measurements unchecked. Your uploaded values will not be changed.','Sélectionnez toutes les variables représentant des catégories ou des groupes, y compris les codes binaires comme 0/1. Elles seront analysées comme des variables catégorielles. Laissez décochées les mesures continues. Les valeurs importées ne seront pas modifiées.','Seleccione todas las variables que representen categorías o grupos, incluidos códigos binarios como 0/1. Se analizarán como categóricas. Deje sin marcar las mediciones continuas. Los valores importados no se modificarán.','Выберите все переменные, представляющие категории или группы, включая двоичные коды, например 0/1. Они будут анализироваться как категориальные. Не отмечайте непрерывные измерения. Загруженные значения не изменятся.'],
+    ['Detected categorical','Détectée comme catégorielle','Detectada como categórica','Определена как категориальная'],
+    ['Detected numeric','Détectée comme numérique','Detectada como numérica','Определена как числовая'],
+    ['Clear selection','Effacer la sélection','Borrar selección','Снять выделение'],
+    ['Continue to analysis','Continuer vers l’analyse','Continuar al análisis','Перейти к анализу'],
+    ['Cancel upload','Annuler l’importation','Cancelar carga','Отменить загрузку'],
+    ['Categorical and grouping variables','Variables catégorielles et de regroupement','Variables categóricas y de agrupación','Категориальные переменные и переменные группировки'],
+    ['Choose categorical/grouping variables…','Choisissez les variables catégorielles/de regroupement…','Seleccione las variables categóricas/de agrupación…','Выберите категориальные переменные и переменные группировки…']
+  );
   for (const row of rows) if (!outputOnlyKeys.has(row[0])) for (let i = 0; i < languages.length; i++) { const value = row[i] ?? row[0]; dict[languages[i]].set(row[0], value); reverse.set(value, row[0]); }
   const arabic = new Map([
     ['Confirm data de-identification','تأكيد إزالة الهوية من البيانات'],
@@ -219,6 +230,11 @@
   arabic.set('Distributions', 'التوزيعات');
   arabic.set('Comparisons and relationships', 'المقارنات والعلاقات');
   arabic.set('Data quality', 'جودة البيانات');
+  arabic.set('Select categorical/grouping variables', 'اختر المتغيرات الفئوية/متغيرات التجميع');
+  arabic.set('Select all variables that represent categories or groups, including binary codes such as 0/1. These variables will be analyzed as categorical. Leave continuous measurements unchecked. Your uploaded values will not be changed.', 'اختر جميع المتغيرات التي تمثل فئات أو مجموعات، بما فيها الرموز الثنائية مثل 0/1. ستُحلل هذه المتغيرات على أنها فئوية. اترك القياسات المستمرة دون تحديد. لن تتغير القيم التي رفعتها.');
+  arabic.set('Detected categorical', 'تم اكتشافه كمتغير فئوي'); arabic.set('Detected numeric', 'تم اكتشافه كمتغير رقمي');
+  arabic.set('Clear selection', 'مسح التحديد'); arabic.set('Continue to analysis', 'المتابعة إلى التحليل'); arabic.set('Cancel upload', 'إلغاء الرفع');
+  arabic.set('Categorical and grouping variables', 'المتغيرات الفئوية ومتغيرات التجميع'); arabic.set('Choose categorical/grouping variables…', 'اختر المتغيرات الفئوية/متغيرات التجميع…');
   arabic.set('Figure details', 'تفاصيل الشكل');
   arabic.set('Palette', 'لوحة الألوان');
   arabic.set('Color', 'اللون');

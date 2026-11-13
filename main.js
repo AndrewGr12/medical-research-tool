@@ -244,6 +244,24 @@ function askPatientId(headers, rows) {
   return new Promise(resolve => dialog.addEventListener('close', () => resolve(patientIdChoice(dialog.returnValue, select.value)), { once: true }));
 }
 
+function chooseGroupingVariables(headers, rows, patientId) {
+  const dialog = $('groupingPrompt'), list = $('groupingVariables');
+  const tx = value => window.AppI18n?.text(value) ?? value;
+  const columns = headers.map((name, index) => ({ name, index })).filter(c => c.name !== patientId);
+  const detected = new Map(columns.map(c => [c.name, analyzeColumn(c.name, c.index, rows, [], null).type]));
+  list.innerHTML = columns.map(({ name }) => {
+    const type = detected.get(name), checked = type === 'categorical';
+    const typeLabel = type === 'categorical' ? 'Detected categorical' : 'Detected numeric';
+    return `<label class="grouping-variable-option"><input type="checkbox" value="${esc(name)}"${checked ? ' checked' : ''}><span class="grouping-variable-name" data-raw>${esc(displayVariableName(name))}</span><small>${esc(tx(typeLabel))}</small></label>`;
+  }).join('');
+  dialog.returnValue = '';
+  dialog.showModal();
+  list.querySelector('input')?.focus();
+  return new Promise(resolve => dialog.addEventListener('close', () => {
+    resolve(dialog.returnValue === 'continue' ? [...list.querySelectorAll('input:checked')].map(input => input.value) : null);
+  }, { once: true }));
+}
+
 function chooseWorksheet(sheetNames) {
   if (sheetNames.length === 1) return Promise.resolve(sheetNames[0]);
   const dialog = $('sheetPrompt'), select = $('sheetChoice');
@@ -284,6 +302,14 @@ async function loadText(text, name, options = {}) {
       // Patient ID exclusion warning box disabled by request:
       // warnings.push(`“${patientId}” was identified as a patient ID and excluded from analysis.`);
     }
+    setStatus('Choose categorical/grouping variables…');
+    const groupingVariables = await chooseGroupingVariables(headers, rows, patientId);
+    if (groupingVariables === null) {
+      $('file').value = '';
+      setStatus(''); showError('');
+      return;
+    }
+    groupingVariables.forEach(name => { if (name !== patientId) state.types[name] = 'categorical'; });
     state.t1 = { group: '', overall: true, testMode: 'parametric', showPValues: false, skip: new Set(), selected: new Set(headers.filter(h => h !== patientId)), catChoices: {} };
     state.expandedCategoricals = new Set();
     const a = await analyzeAll(headers, rows);
@@ -1587,6 +1613,10 @@ function init() {
   $('patientYes').addEventListener('click', () => { if ($('patientColumn').value) $('patientPrompt').close('yes'); });
   $('patientNo').addEventListener('click', () => $('patientPrompt').close('no'));
   $('patientClose').addEventListener('click', () => $('patientPrompt').close('cancel'));
+  $('groupingSelectAll').addEventListener('click', () => $('groupingVariables').querySelectorAll('input[type="checkbox"]').forEach(input => { input.checked = true; }));
+  $('groupingClearAll').addEventListener('click', () => $('groupingVariables').querySelectorAll('input[type="checkbox"]').forEach(input => { input.checked = false; }));
+  $('groupingContinue').addEventListener('click', () => $('groupingPrompt').close('continue'));
+  $('groupingCancel').addEventListener('click', () => $('groupingPrompt').close('cancel'));
   const uploadConsent = $('uploadConsentPrompt');
   uploadConsent.addEventListener('close', () => {
     const file = pendingUploadFile;

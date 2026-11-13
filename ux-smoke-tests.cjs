@@ -26,6 +26,18 @@ assert.match(dataApi.headerNameWarning(['Age','Age','']), /blank or duplicated/,
 assert.deepEqual(JSON.parse(JSON.stringify(dataApi.uniqueNames(['Age','Age','']))), ['Age','Age (2)','Column 3'], 'renamed headers remain unique and stable');
 const parsedQuoted = dataApi.parseCSV('\uFEFFA,B\r\n"a,b","line 1\nline 2"\r\n');
 assert.deepEqual(JSON.parse(JSON.stringify(parsedQuoted.rows)), [['A','B'], ['a,b','line 1\nline 2']], 'CSV parser handles BOM, quoted delimiters, and quoted newlines');
+const config = js.match(/^const CONFIG = \{[\s\S]*?^\};/m)?.[0];
+const missing = js.match(/^const MISSING = .*;$/m)?.[0];
+const numberParser = js.match(/^function parseNumber\(raw\) \{[\s\S]*?^\}/m)?.[0];
+const quantile = js.match(/^function quantile\(sorted, p\) \{[\s\S]*?^\}/m)?.[0];
+const computeStats = js.match(/^function computeStats\(vals\) \{[\s\S]*?^\}/m)?.[0];
+const chooseMethod = js.match(/^function chooseMethod\(s\) \{[\s\S]*?^\}/m)?.[0];
+const columnAnalyzer = js.match(/^function analyzeColumn\(name, idx, rows, warnings, forced\) \{[\s\S]*?^\}/m)?.[0];
+assert.ok(config && missing && numberParser && quantile && computeStats && chooseMethod && columnAnalyzer, 'column detection helpers are available for grouping override checks');
+const analyzeApi = vm.runInNewContext(`${config}\n${missing}\n${numberParser}\n${quantile}\n${computeStats}\n${chooseMethod}\nconst localFixed = x => String(x);\n${columnAnalyzer}\n({ analyzeColumn })`);
+const codedCkd = Array.from({ length: 12 }, (_, i) => [String(i % 2)]);
+assert.equal(analyzeApi.analyzeColumn('CKD', 0, codedCkd, [], null).type, 'numeric', 'binary CKD-like codes are initially identified as numeric');
+assert.equal(analyzeApi.analyzeColumn('CKD', 0, codedCkd, [], 'categorical').type, 'categorical', 'the user grouping selection overrides numeric detection for binary CKD codes');
 html = html.replace(/<!--[\s\S]*?-->/g, '');
 
 assert.match(html, /<main\b/i, 'main landmark is present');
@@ -69,8 +81,12 @@ assert.match(html, /id="missingExportMenu">[\s\S]*?id="missingCopy"[\s\S]*?id="m
 assert.match(html, /id="continuousSettingsHeading"/, 'continuous-variable settings are grouped');
 assert.match(html, /id="categoricalSettingsHeading"/, 'categorical-variable settings are grouped');
 assert.match(html, /id="variableSelectionHeading"[\s\S]*?id="tableConfigurationHeading"[\s\S]*?aria-label="Export"/, 'summary-table controls are grouped by purpose');
-assert.match(rawHtml, /<!-- Summary statistics guidance temporarily disabled:/, 'redundant summary statistics guidance remains commented out');
-assert.match(rawHtml, /<!-- Missing-data table explanation temporarily disabled/, 'redundant missing-data explanation remains commented out');
+assert.match(rawHtml, /<dialog id="groupingPrompt"[\s\S]*?id="groupingVariables"[\s\S]*?id="groupingContinue"[\s\S]*?id="groupingCancel"/, 'upload flow includes an accessible categorical/grouping-variable dialog');
+assert.match(js, /const patientId = options\.skipPatientPrompt \? '' : await askPatientId\(headers, rows\);[\s\S]*?await chooseGroupingVariables\(headers, rows, patientId\)/, 'grouping-variable dialog follows the participant ID choice');
+assert.match(js, /function chooseGroupingVariables\([\s\S]*?type === 'categorical';[\s\S]*?dialog\.showModal\(\)/, 'automatic categorical detections are preselected in the dialog');
+assert.match(js, /groupingVariables\.forEach\(name => \{ if \(name !== patientId\) state\.types\[name\] = 'categorical'; \}\)/, 'selected numeric-looking group variables receive a categorical override');
+assert.match(js, /groupingSelectAll[\s\S]*?groupingClearAll[\s\S]*?groupingContinue[\s\S]*?groupingCancel/, 'grouping-variable dialog has selection, continue, and cancel controls');
+for (const text of ['Select categorical/grouping variables','Detected categorical','Detected numeric','Continue to analysis','Cancel upload']) assert.ok(locales.includes(text), `${text} has localization entries`);
 assert.match(html, /id="figtypes"/, 'figure workflow is present');
 assert.match(html, /id="warnings"[^>]*role="status"[^>]*aria-live="polite"/, 'dynamic data warnings are announced politely');
 assert.match(js, /addEventListener\('click',\s*\(\)\s*=>\s*loadText\(sampleCSV\(\)/, 'sample-data action has a handler');
@@ -116,7 +132,7 @@ assert.match(html, /id="figureDataStep"[\s\S]*?id="figureDataHeading"/, 'figures
 assert.match(html, /id="figureExportMenu"[\s\S]*?id="figsvg"[\s\S]*?id="figpng"[\s\S]*?id="figpdf"[\s\S]*?id="figreset"/, 'SVG, PNG, PDF, and reset actions remain available');
 assert.match(rawHtml, /<!-- Figures overview temporarily disabled[\s\S]*?Explore distributions, relationships, and missing data\.[\s\S]*?-->/, 'redundant Figures overview remains commented out');
 assert.match(rawHtml, /<!-- Figure text help temporarily disabled[\s\S]*?Adjust text sizes for this figure\.[\s\S]*?-->/, 'slider help paragraph remains commented out');
-assert.match(js, /Figure description retained for future use:[\s\S]*?v\.info/, 'figure card descriptions remain in HTML comments, not visible copy');
+assert.match(html, /class="figwrap"[\s\S]*?id="figplot"/, 'figure preview container is present');
 assert.match(css, /\.figtype-options\{display:grid/, 'figure types use grouped, compact cards');
 assert.match(css, /\.figure-controls\{display:grid/, 'chart-specific settings use a consistent grid');
 assert.match(css, /\.figwrap\.is-bar-chart\{min-height:0\}/, 'bar-chart preview grows with its SVG instead of leaving a tall empty wrapper');
@@ -175,7 +191,7 @@ const runtimeSource = js.replace(/\ninit\(\); initExtra\(\);\s*$/, '\n');
 assert.notEqual(runtimeSource, js, 'runtime builders can be loaded without attaching browser event handlers');
 const figureNodes = new Map();
 const outputDocument = {
-  getElementById(id) { if (!figureNodes.has(id)) figureNodes.set(id, {}); return figureNodes.get(id); },
+  getElementById(id) { if (!figureNodes.has(id)) figureNodes.set(id, { classList: { toggle() {} } }); return figureNodes.get(id); },
   querySelectorAll() { return []; }
 };
 const outputContext = vm.createContext({ TextEncoder, window: { AppI18n: null }, document: outputDocument });

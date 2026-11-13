@@ -502,6 +502,14 @@
   <div class="patient-actions"><button type="button" class="btn primary" id="patientYes" disabled>Yes, exclude this column</button><button type="button" class="btn" id="patientNo">No ID column</button></div>
 </dialog>
 
+<dialog id="groupingPrompt" aria-labelledby="groupingTitle" aria-describedby="groupingDescription" class="grouping-dialog">
+  <h2 id="groupingTitle">Select categorical/grouping variables</h2>
+  <p id="groupingDescription">Select all variables that represent categories or groups, including binary codes such as 0/1. These variables will be analyzed as categorical. Leave continuous measurements unchecked. Your uploaded values will not be changed.</p>
+  <div class="grouping-list-actions"><button type="button" class="btn" id="groupingSelectAll">Select all</button><button type="button" class="btn" id="groupingClearAll">Clear selection</button></div>
+  <div id="groupingVariables" class="grouping-variable-list" role="group" aria-label="Categorical and grouping variables"></div>
+  <div class="patient-actions"><button type="button" class="btn primary" id="groupingContinue">Continue to analysis</button><button type="button" class="btn" id="groupingCancel">Cancel upload</button></div>
+</dialog>
+
 <dialog id="detail" aria-labelledby="dtitle">
   <h2 id="dtitle"></h2>
   <div class="boxplot-wrap">
