@@ -302,14 +302,16 @@ async function loadText(text, name, options = {}) {
       // Patient ID exclusion warning box disabled by request:
       // warnings.push(`“${patientId}” was identified as a patient ID and excluded from analysis.`);
     }
-    setStatus('Choose categorical/grouping variables…');
-    const groupingVariables = await chooseGroupingVariables(headers, rows, patientId);
-    if (groupingVariables === null) {
-      $('file').value = '';
-      setStatus(''); showError('');
-      return;
+    if (!options.skipGroupingPrompt) {
+      setStatus('Choose categorical/grouping variables…');
+      const groupingVariables = await chooseGroupingVariables(headers, rows, patientId);
+      if (groupingVariables === null) {
+        $('file').value = '';
+        setStatus(''); showError('');
+        return;
+      }
+      groupingVariables.forEach(name => { if (name !== patientId) state.types[name] = 'categorical'; });
     }
-    groupingVariables.forEach(name => { if (name !== patientId) state.types[name] = 'categorical'; });
     state.t1 = { group: '', overall: true, testMode: 'parametric', showPValues: false, skip: new Set(), selected: new Set(headers.filter(h => h !== patientId)), catChoices: {} };
     state.expandedCategoricals = new Set();
     const a = await analyzeAll(headers, rows);
@@ -1295,22 +1297,26 @@ const need = kind => ({ msg: (kind === 'cat' ? state.categorical : state.results
 const done = (svg, d, desc, hasLegend = false) => ({ svg, w: d.outputW || d.W, h: d.H, desc, hasLegend: hasLegend && state.fig?.showLegend !== false });
 
 function buildFigureLegend(items, marker = 'circle', heading = '') {
-  const size = figTextSize('legend'), rowHeight = size + 8, xPad = 8, yPad = 7;
+  const size = figTextSize('legend'), rowHeight = Math.max(22, size + 10), xPad = 12, yPad = 8;
   const labels = items.map(item => String(item.label));
-  const textWidth = Math.max(0, ...labels.map(label => label.length * size * 0.58));
-  const headingWidth = heading ? String(heading).length * size * 0.58 : 0;
-  const boxWidth = Math.ceil(textWidth + xPad * 2 + 17), width = Math.max(boxWidth, Math.ceil(headingWidth + xPad));
-  const headingHeight = heading ? size + 12 : 0, boxHeight = items.length * rowHeight + yPad * 2, height = headingHeight + boxHeight;
-  const legendText = (x, y, text, textWidth, anchor = 'start', weight = '') => `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${size}" fill="#1d2430"${weight ? ` font-weight="${weight}"` : ''} textLength="${Math.max(1, textWidth)}" lengthAdjust="spacingAndGlyphs">${esc(text)}</text>`;
+  const estimateTextWidth = text => Array.from(String(text)).reduce((width, char) => {
+    const factor = /\s/.test(char) ? 0.34 : /[ilI1.,:;!'|]/.test(char) ? 0.32 : /[MW@%&]/.test(char) ? 0.9 : char.codePointAt(0) > 0x2e80 ? 1 : /[A-Z]/.test(char) ? 0.68 : 0.58;
+    return width + factor;
+  }, 0) * size * 1.12;
+  const textWidth = Math.max(0, ...labels.map(estimateTextWidth));
+  const headingWidth = heading ? estimateTextWidth(heading) * 1.04 : 0;
+  const boxWidth = Math.max(96, Math.ceil(textWidth + xPad * 2 + 20 + 10)), width = Math.max(boxWidth, Math.ceil(headingWidth + xPad * 2));
+  const headingHeight = heading ? size + 13 : 0, boxHeight = items.length * rowHeight + yPad * 2;
+  const legendText = (x, y, text, anchor = 'start', weight = '') => `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${size}" fill="#1d2430"${weight ? ` font-weight="${weight}"` : ''}>${esc(text)}</text>`;
   const rows = items.map((item, i) => {
     const baseline = headingHeight + yPad + size + i * rowHeight;
     const swatch = marker === 'box'
       ? `<rect x="${xPad}" y="${baseline - 9}" width="10" height="10" rx="2" fill="${item.color}" fill-opacity=".5" stroke="${item.color}"/>`
       : `<circle cx="${xPad + 5}" cy="${baseline - 4}" r="4" fill="${item.color}"/>`;
-    return swatch + legendText(xPad + 17, baseline, labels[i], labels[i].length * size * 0.58);
+    return swatch + legendText(xPad + 30, baseline, labels[i]);
   }).join('');
-  const box = `<rect y="${headingHeight}" width="${boxWidth}" height="${boxHeight}" rx="5" fill="#fff" stroke="#d7dde5"/>`;
-  const title = heading ? legendText(0, size, String(heading), headingWidth, 'start', 600) : '';
+  const box = `<rect y="${headingHeight}" width="${width}" height="${boxHeight}" rx="5" fill="#fff" stroke="#d7dde5"/>`;
+  const title = heading ? legendText(xPad, size + 4, String(heading), 'start', '600') : '';
   return { svg: box + title + rows, width };
 }
 
@@ -1632,7 +1638,7 @@ function init() {
   ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
   drop.addEventListener('drop', e => requestUploadConsent(e.dataTransfer.files[0]));
   ['dragover', 'drop'].forEach(t => window.addEventListener(t, e => e.preventDefault()));
-  $('sample').addEventListener('click', () => loadText(sampleCSV(), 'sample_data.csv', { skipPatientPrompt: true }));
+  $('sample').addEventListener('click', () => loadText(sampleCSV(), 'sample_data.csv', { skipPatientPrompt: true, skipGroupingPrompt: true }));
   $('reset').addEventListener('click', reset);
   $('restart').addEventListener('click', reset);
   document.querySelectorAll('#stats [data-sort]').forEach(b => b.addEventListener('click', () => {

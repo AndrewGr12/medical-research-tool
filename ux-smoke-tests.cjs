@@ -83,6 +83,8 @@ assert.match(html, /id="categoricalSettingsHeading"/, 'categorical-variable sett
 assert.match(html, /id="variableSelectionHeading"[\s\S]*?id="tableConfigurationHeading"[\s\S]*?aria-label="Export"/, 'summary-table controls are grouped by purpose');
 assert.match(rawHtml, /<dialog id="groupingPrompt"[\s\S]*?id="groupingVariables"[\s\S]*?id="groupingContinue"[\s\S]*?id="groupingCancel"/, 'upload flow includes an accessible categorical/grouping-variable dialog');
 assert.match(js, /const patientId = options\.skipPatientPrompt \? '' : await askPatientId\(headers, rows\);[\s\S]*?await chooseGroupingVariables\(headers, rows, patientId\)/, 'grouping-variable dialog follows the participant ID choice');
+assert.match(js, /if \(!options\.skipGroupingPrompt\) \{[\s\S]*?await chooseGroupingVariables\(headers, rows, patientId\)/, 'the grouping dialog can be bypassed for trusted sample data');
+assert.match(js, /loadText\(sampleCSV\(\), 'sample_data\.csv', \{ skipPatientPrompt: true, skipGroupingPrompt: true \}\)/, 'Try sample data skips both upload-specific prompts');
 assert.match(js, /function chooseGroupingVariables\([\s\S]*?type === 'categorical';[\s\S]*?dialog\.showModal\(\)/, 'automatic categorical detections are preselected in the dialog');
 assert.match(js, /groupingVariables\.forEach\(name => \{ if \(name !== patientId\) state\.types\[name\] = 'categorical'; \}\)/, 'selected numeric-looking group variables receive a categorical override');
 assert.match(js, /groupingSelectAll[\s\S]*?groupingClearAll[\s\S]*?groupingContinue[\s\S]*?groupingCancel/, 'grouping-variable dialog has selection, continue, and cancel controls');
@@ -228,9 +230,10 @@ const localeSnapshots = vm.runInContext(`(() => {
     state.fig.textSizes.legend = 16;
     const longLegendText = 'Ulcerative colitis with an intentionally long category label';
     const expandedLegend = buildFigureLegend([{ label: longLegendText, color: '#1f4e79' }]);
+    const compactLegend = buildFigureLegend([{ label: '0', color: '#0072B2' }, { label: '1', color: '#E69F00' }], 'circle', 'diuretic use');
     state.fig.textSizes.legend = priorLegendSize;
     const csv = rows => rows.map(row => row.map(csvCell).join(',')).join('\\r\\n');
-    return JSON.stringify({ summary, table1, missingSummary, matrix, figures, barFigureHeight: figures[2].h, barLevelCount: Math.min(15, state.categorical.find(c => c.name === state.t1.group).freq.size), figureConfigViews, figureTypeCards, expandedLegend, longLegendText, summaryCsv: csv(summary), table1Csv: csv(matrix),
+    return JSON.stringify({ summary, table1, missingSummary, matrix, figures, barFigureHeight: figures[2].h, barLevelCount: Math.min(15, state.categorical.find(c => c.name === state.t1.group).freq.size), figureConfigViews, figureTypeCards, expandedLegend, compactLegend, longLegendText, summaryCsv: csv(summary), table1Csv: csv(matrix),
       summaryTsv: summary.map(row => row.map(tsvCell).join('\\t')).join('\\r\\n'),
       summaryDocx: Array.from(summaryDocx()), table1Docx: Array.from(table1Docx()) });
   });
@@ -241,6 +244,8 @@ assert.equal(figureSnapshot.barFigureHeight, 112 + 26 * figureSnapshot.barLevelC
 assert.ok(figureSnapshot.expandedLegend.width > 190, 'legend width can expand beyond the old fixed cap');
 assert.ok(figureSnapshot.expandedLegend.svg.includes(figureSnapshot.longLegendText), 'long legend labels remain complete at larger text sizes');
 assert.doesNotMatch(figureSnapshot.expandedLegend.svg, /…/, 'long legend labels are not truncated');
+assert.ok(figureSnapshot.compactLegend.width >= 96, 'short category legends retain enough width for readable spacing');
+assert.doesNotMatch(figureSnapshot.compactLegend.svg, /textLength|lengthAdjust/, 'legend titles and labels use natural SVG text width instead of being compressed or stretched');
 const expectedFigureControls = { hist: ['figx'], box: ['figx', 'figg'], bar: ['figc', 'figmode'], scatter: ['figx', 'figy', 'figg'] };
 for (const view of figureSnapshot.figureConfigViews) {
   for (const id of expectedFigureControls[view.type]) assert.match(view.controls, new RegExp(`id="${id}"`), `${view.type} exposes its supported control #${id}`);
