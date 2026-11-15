@@ -331,6 +331,7 @@ html[lang="ar"] .fig-field{text-align:right}
   .fig-scatter-options{grid-column:auto;grid-template-columns:repeat(2,minmax(0,1fr))}
   .fig-text-grid{grid-template-columns:minmax(0,1fr);gap:10px;padding:10px 12px 14px}
   .figwrap{min-height:320px;padding:8px}
+  .figwrap svg{max-width:none;min-width:640px}
   .figure-actions{display:grid;grid-template-columns:1fr 1fr}
   .figure-actions #figureExportMenu>.btn,.figure-actions>#figreset{width:100%}
 }

@@ -1168,7 +1168,9 @@ function initExtra() {
     else if (t) { state.fig.type = t.dataset.fig; figRefresh(); if (state.view !== 'figures') return; }
   });
   $('figctl').addEventListener('input', e => { const groupLabel = e.target.dataset.groupColor; if (groupLabel) { const groupName = e.target.dataset.groupVariable; state.fig.groupColors ||= {}; state.fig.groupColors[groupName] ||= {}; state.fig.groupColors[groupName][groupLabel] = e.target.value; figDraw(); return; } const k = e.target.dataset.f; if (!k) return; state.fig[k] = ['bins'].includes(k) ? (Math.floor(+e.target.value) || 0) : ['opacity', 'pointSize'].includes(k) ? Number(e.target.value) : e.target.type === 'checkbox' ? e.target.checked : e.target.value; if (k === 'showP' || k === 'g' || k === 'palette') figRefresh(); else if (['title', 'xLabel', 'yLabel'].includes(k)) { clearTimeout(window.figureInputTimer); window.figureInputTimer = setTimeout(figDraw, 180); } else figDraw(); });
-  $('figTextControls').addEventListener('input', e => { const key = e.target.dataset.figFont; if (!key || !state.fig) return; const value = Number(e.target.value); ensureFigureTextSizes(state.fig)[key] = value; const output = document.getElementById(e.target.id + 'Value'); if (output) { output.value = value + ' px'; output.textContent = value + ' px'; } figDraw(); });
+  const updateFigureTextSize = e => { const key = e.target.dataset.figFont; if (!key || !state.fig) return; const value = Number(e.target.value); ensureFigureTextSizes(state.fig)[key] = value; const output = document.getElementById(e.target.id + 'Value'); if (output) { output.value = value + ' px'; output.textContent = value + ' px'; } figDraw(); };
+  $('figTextControls').addEventListener('input', updateFigureTextSize);
+  $('figTextControls').addEventListener('change', updateFigureTextSize);
   $('figreset').addEventListener('click', () => { state.fig = null; figRefresh(); });
   $('figsvg').addEventListener('click', () => { const svg = displayedFigureSvg(); if (figCur && svg) download(svg, figName('svg'), 'image/svg+xml'); });
   $('figpng').addEventListener('click', figPng);
@@ -1283,7 +1285,7 @@ function niceTicks(lo, hi, n = 5) {
   for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + step * 1e-9; v += step) out.push(+v.toPrecision(12));
   return out;
 }
-const T = (x, y, s, a = 'middle', fill = '#1d2430', sz = 12) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="${sz}" fill="${fill}">${esc(s)}</text>`;
+const T = (x, y, s, a = 'middle', fill = '#1d2430', sz = 12) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="${sz}" style="font-size:${sz}px" fill="${fill}">${esc(s)}</text>`;
 const yAx = (d, sy, tk) => tk.map(v => `${state.fig?.showGrid === false ? '' : `<line x1="${d.l}" x2="${d.W - d.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="#e3e7ec"/>`}${T(d.l - 6, sy(v) + 4, tl(v), 'end', '#5b6573', figTextSize('tick'))}`).join('') + `<line x1="${d.l}" x2="${d.l}" y1="${d.t}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
 const xAx = (d, sx, tk) => tk.map(v => `<line x1="${sx(v)}" x2="${sx(v)}" y1="${d.H - d.b}" y2="${d.H - d.b + 5}" stroke="#5b6573"/>${T(sx(v), d.H - d.b + 18, tl(v), 'middle', '#5b6573', figTextSize('tick'))}`).join('') + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
 function frame(d, inner, title, xl, yl, legend = null) {
@@ -1294,7 +1296,7 @@ function frame(d, inner, title, xl, yl, legend = null) {
   const outputW = d.W + (legend ? legend.width + 24 : 0);
   d.outputW = outputW;
   const legendSvg = legend ? `<g transform="translate(${d.W + 16} 34)">${legend.svg}</g>` : '';
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${outputW} ${d.H}" width="${outputW}" height="${d.H}" font-family="system-ui, Arial, sans-serif" role="img" aria-label="${esc(title)}"><title>${esc(title)}</title><rect width="${outputW}" height="${d.H}" fill="#fff"/><text x="${d.W / 2}" y="${Math.max(22, figTextSize('title') + 6)}" text-anchor="middle" font-size="${figTextSize('title')}" font-weight="600" fill="#1d2430">${esc(title)}</text>${inner}${legendSvg}${T((d.l + d.W - d.r) / 2, d.H - 10, xl, 'middle', '#1d2430', figTextSize('axis'))}${yl ? `<text transform="translate(16 ${(d.t + d.H - d.b) / 2}) rotate(-90)" text-anchor="middle" font-size="${figTextSize('axis')}" fill="#1d2430">${esc(yl)}</text>` : ''}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${outputW} ${d.H}" width="${outputW}" height="${d.H}" font-family="system-ui, Arial, sans-serif" role="img" aria-label="${esc(title)}"><title>${esc(title)}</title><rect width="${outputW}" height="${d.H}" fill="#fff"/><text x="${d.W / 2}" y="${Math.max(22, figTextSize('title') + 6)}" text-anchor="middle" font-size="${figTextSize('title')}" style="font-size:${figTextSize('title')}px" font-weight="600" fill="#1d2430">${esc(title)}</text>${inner}${legendSvg}${T((d.l + d.W - d.r) / 2, d.H - 10, xl, 'middle', '#1d2430', figTextSize('axis'))}${yl ? `<text transform="translate(16 ${(d.t + d.H - d.b) / 2}) rotate(-90)" text-anchor="middle" font-size="${figTextSize('axis')}" style="font-size:${figTextSize('axis')}px" fill="#1d2430">${esc(yl)}</text>` : ''}</svg>`;
 }
 const need = kind => ({ msg: (kind === 'cat' ? state.categorical : state.results).length ? 'Choose a variable.' : (kind === 'cat' ? 'No category columns were detected. Try a histogram or box plot using a numeric column.' : 'No numeric columns were detected. Try a bar chart using a category column.') });
 const done = (svg, d, desc, hasLegend = false) => ({ svg, w: d.outputW || d.W, h: d.H, desc, hasLegend: hasLegend && state.fig?.showLegend !== false });
@@ -1310,7 +1312,7 @@ function buildFigureLegend(items, marker = 'circle', heading = '') {
   const headingWidth = heading ? estimateTextWidth(heading) * 1.04 : 0;
   const boxWidth = Math.max(96, Math.ceil(textWidth + xPad * 2 + 20 + 10)), width = Math.max(boxWidth, Math.ceil(headingWidth + xPad * 2));
   const headingHeight = heading ? size + 13 : 0, boxHeight = items.length * rowHeight + yPad * 2;
-  const legendText = (x, y, text, anchor = 'start', weight = '') => `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${size}" fill="#1d2430"${weight ? ` font-weight="${weight}"` : ''}>${esc(text)}</text>`;
+  const legendText = (x, y, text, anchor = 'start', weight = '') => `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${size}" style="font-size:${size}px" fill="#1d2430"${weight ? ` font-weight="${weight}"` : ''}>${esc(text)}</text>`;
   const rows = items.map((item, i) => {
     const baseline = headingHeight + yPad + size + i * rowHeight;
     const swatch = marker === 'box'
