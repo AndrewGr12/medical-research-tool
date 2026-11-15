@@ -218,8 +218,17 @@
 
   <div id="results" hidden>
     <section class="fileinfo" aria-label="File information">
-      <div>
-        <h2 id="fname"></h2>
+      <div class="fileinfo-main">
+        <div class="fileinfo-title">
+          <h2 id="fname"></h2>
+          <details class="menu" id="sampleExportMenu" hidden>
+            <summary class="btn primary">Export</summary>
+            <div class="menupanel">
+              <button type="button" class="btn" id="sampleCsvDownload">Download CSV</button>
+              <button type="button" class="btn" id="sampleExcelDownload">Download Excel (.xlsx)</button>
+            </div>
+          </details>
+        </div>
         <dl id="fstats"></dl>
       </div>
       <button type="button" id="reset" class="btn">Remove file</button>
@@ -520,6 +529,7 @@
 </dialog>
 
 <script src="locales.js"></script>
+<script src="sample-data.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

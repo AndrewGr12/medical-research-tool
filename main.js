@@ -378,6 +378,7 @@ function renderAll(warnings) {
   if ($('results').hidden) fadeHide($('landing'), () => { fadeShow($('results')); $('restart').hidden = false; const h = $('home').querySelector('[data-h]'); if (h) h.focus(); });
   else $('restart').hidden = false;
   $('fname').textContent = state.fileName;
+  $('sampleExportMenu').hidden = state.fileName !== 'sample data';
   $('fname').setAttribute('data-raw', '');
   $('fstats').innerHTML = [['Rows', state.rows.length], ['Columns', state.headers.length], ['Numeric', state.results.length], ['Categorical', state.categorical.length], ['Excluded', state.excluded.length]]
     .map(([k, v]) => {
@@ -713,32 +714,9 @@ function download(text, filename, type) {
 }
 const baseName = () => (state.fileName.replace(/\.(csv|xlsx|xls|xlsm|xlsb)$/i, '') || 'data') + '_descriptive_stats';
 
-// ---------- Sample data (entirely synthetic) ----------
+// ---------- Sample data (entirely synthetic; shared with sample-data.js) ----------
 function sampleCSV() {
-  let seed = 20240607;
-  const rand = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-  const norm = (m, s) => m + s * Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
-  const maybe = (v, p) => rand() < p ? (rand() < 0.5 ? '' : 'NA') : v;
-  const lines = ['Age,BMI,Hemoglobin,CRP,Albumin,Length_of_stay,Disease_duration,Sex,Diagnosis,Disease_activity,Smoking_status,Diabetes,Hypertension,Treatment'];
-  for (let i = 0; i < 240; i++) {
-    lines.push([
-      Math.max(18, Math.round(norm(54, 12))),
-      maybe(Math.max(14, norm(27, 4.5)).toFixed(1), 0.03),
-      maybe(norm(13.1, 1.6).toFixed(1), 0.02),
-      maybe(Math.exp(norm(1.2, 1.1)).toFixed(1), 0.08),
-      maybe(Math.min(5, norm(3.8, 0.45)).toFixed(1), 0.05),
-      Math.max(1, Math.round(Math.exp(norm(1.5, 0.8)))),
-      maybe(Math.exp(norm(1.6, 0.9)).toFixed(1), 0.04),
-      rand() < 0.48 ? 'Male' : 'Female',
-      rand() < 0.55 ? "Crohn's disease" : 'Ulcerative colitis',
-      (() => { const p = rand(); return p < 0.2 ? 'Remission' : p < 0.45 ? 'Mild' : p < 0.8 ? 'Moderate' : 'Severe'; })(),
-      (() => { const p = rand(); return p < 0.62 ? 'Never' : p < 0.82 ? 'Former' : 'Current'; })(),
-      rand() < 0.14 ? 'Yes' : 'No',
-      rand() < 0.28 ? 'Yes' : 'No',
-      (() => { const p = rand(); return p < 0.42 ? 'Standard therapy' : p < 0.82 ? 'Biologic' : 'Combination therapy'; })()
-    ].join(','));
-  }
-  return lines.join('\n');
+  return SAMPLE_CSV;
 }
 
 
@@ -1286,6 +1264,22 @@ function niceTicks(lo, hi, n = 5) {
   return out;
 }
 const T = (x, y, s, a = 'middle', fill = '#1d2430', sz = 12) => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="${sz}" style="font-size:${sz}px" fill="${fill}">${esc(s)}</text>`;
+const wrapLabel = (value, maxChars) => {
+  const words = String(value).split(/\s+/).filter(Boolean), lines = [];
+  let line = '';
+  for (const word of words) {
+    if (word.length > maxChars) {
+      if (line) { lines.push(line); line = ''; }
+      for (let i = 0; i < word.length; i += maxChars) lines.push(word.slice(i, i + maxChars));
+    } else if (!line) line = word;
+    else if ((line + ' ' + word).length <= maxChars) line += ' ' + word;
+    else { lines.push(line); line = word; }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [''];
+};
+const multiT = (x, y, lines, anchor = 'middle', fill = '#1d2430', sz = 12, lineHeight = Math.ceil(sz * 1.2)) =>
+  `<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${sz}" style="font-size:${sz}px" fill="${fill}">${lines.map((line, i) => `<tspan x="${x}"${i ? ` dy="${lineHeight}"` : ''}>${esc(line)}</tspan>`).join('')}</text>`;
 const yAx = (d, sy, tk) => tk.map(v => `${state.fig?.showGrid === false ? '' : `<line x1="${d.l}" x2="${d.W - d.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="#e3e7ec"/>`}${T(d.l - 6, sy(v) + 4, tl(v), 'end', '#5b6573', figTextSize('tick'))}`).join('') + `<line x1="${d.l}" x2="${d.l}" y1="${d.t}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
 const xAx = (d, sx, tk) => tk.map(v => `<line x1="${sx(v)}" x2="${sx(v)}" y1="${d.H - d.b}" y2="${d.H - d.b + 5}" stroke="#5b6573"/>${T(sx(v), d.H - d.b + 18, tl(v), 'middle', '#5b6573', figTextSize('tick'))}`).join('') + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
 function frame(d, inner, title, xl, yl, legend = null) {
@@ -1354,13 +1348,14 @@ function figBox(f) {
   const test = g ? boxPlotTests(groups, f) : { note: '' }, pairAnnotations = boxPairLevels(test.pairs || []);
   const hideDuplicateOverall = groups.length === 2 && pairAnnotations.length === 1 && Number.isFinite(test.global?.p) && Number.isFinite(pairAnnotations[0].test.adjusted);
   const showOverall = Boolean(test.annotations) && !hideDuplicateOverall, globalY = Math.max(50, figTextSize('title') + 24), pairStartY = globalY + (showOverall ? 36 : 24), plotTop = test.annotations ? pairStartY + pairAnnotations.length * 24 + 12 : 40;
-  const d = { W: 640, H: 400 + Math.max(0, plotTop - 40), l: 62, r: 20, t: plotTop, b: 70 }, colors = palette(), groupColor = (G, i) => f.groupColors?.[g?.name]?.[G.label] || colors[i % colors.length], legend = g ? buildFigureLegend(groups.map((G, i) => ({ label: G.label, color: groupColor(G, i) })), 'box', displayVariableName(g.name)) : null, sy = lin(lo - pad, hi + pad, d.H - d.b, d.t), bw = (d.W - d.l - d.r) / groups.length, bx = Math.min(60, bw * 0.5);
+  const baseW = 640, baseL = 62, baseR = 20, groupBand = (baseW - baseL - baseR) / groups.length, tickSize = figTextSize('tick'), labelLineHeight = Math.ceil(tickSize * 1.2), labelMaxChars = Math.max(8, Math.floor(groupBand / (tickSize * 0.62))), labelLines = groups.map(G => wrapLabel(G.label, labelMaxChars)), extraLabelSpace = Math.max(0, ...labelLines.map(lines => lines.length - 1)) * (labelLineHeight + 2);
+  const d = { W: baseW, H: 400 + Math.max(0, plotTop - 40) + extraLabelSpace, l: baseL, r: baseR, t: plotTop, b: 70 + extraLabelSpace }, colors = palette(), groupColor = (G, i) => f.groupColors?.[g?.name]?.[G.label] || colors[i % colors.length], legend = g ? buildFigureLegend(groups.map((G, i) => ({ label: G.label, color: groupColor(G, i) })), 'box', displayVariableName(g.name)) : null, sy = lin(lo - pad, hi + pad, d.H - d.b, d.t), bw = (d.W - d.l - d.r) / groups.length, bx = Math.min(60, bw * 0.5);
   const body = groups.map((G, i) => {
     const s = computeStats(G.v), lf = s.q1 - 1.5 * s.iqr, hf = s.q3 + 1.5 * s.iqr, inside = G.v.filter(x => x >= lf && x <= hf), cx = d.l + (i + 0.5) * bw, col = g ? groupColor(G, i) : colors[0];
     const wl = Math.min(...inside), wh = Math.max(...inside);
     const pointMarks = f.showPoints ? G.v.map((x, j) => `<circle cx="${cx + (((j * 37) % 11) - 5) * Math.min(1.5, bw / 80)}" cy="${sy(x)}" r="${f.pointSize || 3}" fill="${col}" fill-opacity="${Math.min(0.8, f.opacity ?? 0.35)}" stroke="#1d2430" stroke-width=".5"/>`).join('') : G.v.filter(x => x < lf || x > hf).map(x => `<circle cx="${cx}" cy="${sy(x)}" r="${f.pointSize || 3}" fill="none" stroke="#1d2430"/>`).join('');
     return `<g stroke="#1d2430" stroke-width="1.5"><line x1="${cx}" x2="${cx}" y1="${sy(wl)}" y2="${sy(s.q1)}"/><line x1="${cx}" x2="${cx}" y1="${sy(s.q3)}" y2="${sy(wh)}"/><line x1="${cx - bx / 4}" x2="${cx + bx / 4}" y1="${sy(wl)}" y2="${sy(wl)}"/><line x1="${cx - bx / 4}" x2="${cx + bx / 4}" y1="${sy(wh)}" y2="${sy(wh)}"/><rect x="${cx - bx / 2}" y="${sy(s.q3)}" width="${bx}" height="${Math.max(1, sy(s.q1) - sy(s.q3))}" fill="${col}" fill-opacity="${f.opacity ?? 0.35}"/><line x1="${cx - bx / 2}" x2="${cx + bx / 2}" y1="${sy(s.median)}" y2="${sy(s.median)}" stroke-width="3"/></g>` + pointMarks
-      + (g ? T(cx, d.H - d.b + 16, cut(G.label, 12), 'middle', '#1d2430', figTextSize('tick')) : '') + T(cx, d.H - d.b + (g ? 36 : 16), `n=${G.v.length}`, 'middle', '#5b6573', figTextSize('value'));
+      + (g ? multiT(cx, d.H - d.b + 16, labelLines[i], 'middle', '#1d2430', tickSize, labelLineHeight) : '') + T(cx, d.H - d.b + (g ? 20 + labelLines[i].length * labelLineHeight : 16), `n=${G.v.length}`, 'middle', '#5b6573', figTextSize('value'));
   }).join('');
   let ax = yAx(d, sy, niceTicks(lo - pad, hi + pad)) + `<line x1="${d.l}" x2="${d.W - d.r}" y1="${d.H - d.b}" y2="${d.H - d.b}" stroke="#5b6573"/>`;
   if (test.annotations) {
@@ -1378,8 +1373,10 @@ function figBox(f) {
 function figBar(f) {
   const c = catVar(f.c); if (!c) return need('cat');
   const lv = byFreq(c); if (f.order === 'alpha') lv.sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })); const shown = lv.slice(0, 15), hid = lv.length - shown.length, pct = f.mode === 'pct';
-  const d = { W: 640, H: 112 + 26 * shown.length, l: 140, r: Math.max(90, figTextSize('value') * 8), t: 56, b: 56 }, vals = shown.map(([, n]) => pct ? 100 * n / c.nonMissing : n), mx = Math.max(...vals), sx = lin(0, mx, d.l, d.W - d.r);
-  const bars = shown.map(([k, n], i) => { const y = d.t + 2 + i * 26, p = 100 * n / c.nonMissing; return T(d.l - 6, y + 14, cut(k, Math.max(8, Math.floor(220 / figTextSize('tick')))), 'end', '#1d2430', figTextSize('tick')) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(vals[i]) - d.l)}" height="20" fill="${f.color || palette()[0]}" fill-opacity="${f.opacity ?? 0.85}"/>` + T(sx(vals[i]) + 4, y + 14, `${outCount(n)} (${localFixed(p, 1)}%)`, 'start', '#1d2430', figTextSize('value')); }).join('');
+  const labelSize = figTextSize('tick'), labelMaxChars = Math.max(8, Math.floor(140 / (labelSize * 0.62))), labelLineHeight = Math.ceil(labelSize * 1.2), labelLines = shown.map(([label]) => wrapLabel(label, labelMaxChars)), rowHeights = labelLines.map(lines => Math.max(26, lines.length * labelLineHeight + 8));
+  const d = { W: 640, H: 112 + rowHeights.reduce((sum, h) => sum + h, 0), l: 140, r: Math.max(90, figTextSize('value') * 8), t: 56, b: 56 }, vals = shown.map(([, n]) => pct ? 100 * n / c.nonMissing : n), mx = Math.max(...vals), sx = lin(0, mx, d.l, d.W - d.r);
+  let rowY = 0;
+  const bars = shown.map(([k, n], i) => { const step = rowHeights[i], y = d.t + rowY + (step - 20) / 2, p = 100 * n / c.nonMissing; rowY += step; return multiT(d.l - 6, y + 14 - ((labelLines[i].length - 1) * labelLineHeight) / 2, labelLines[i], 'end', '#1d2430', labelSize, labelLineHeight) + `<rect x="${d.l}" y="${y}" width="${Math.max(0, sx(vals[i]) - d.l)}" height="20" fill="${f.color || palette()[0]}" fill-opacity="${f.opacity ?? 0.85}"/>` + T(sx(vals[i]) + 4, y + 14, `${outCount(n)} (${localFixed(p, 1)}%)`, 'start', '#1d2430', figTextSize('value')); }).join('');
   return done(frame(d, xAx(d, sx, niceTicks(0, mx)) + bars, cut(displayVariableName(c.name), 60), pct ? `Percent of non-missing (n = ${c.nonMissing})` : 'Count', ''), d,
     `Bar chart of ${displayVariableName(c.name)}: ${c.nonMissing} non-missing observations; ${c.missing} missing excluded from percentages.${hid ? ` Showing the 15 most frequent of ${lv.length} levels; ${hid} not shown.` : ''}`);
 }
@@ -1645,7 +1642,29 @@ function init() {
   ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
   drop.addEventListener('drop', e => requestUploadConsent(e.dataTransfer.files[0]));
   ['dragover', 'drop'].forEach(t => window.addEventListener(t, e => e.preventDefault()));
-  $('sample').addEventListener('click', () => loadText(sampleCSV(), 'sample_data.csv', { skipPatientPrompt: true, skipGroupingPrompt: true }));
+  $('sample').addEventListener('click', () => loadText(sampleCSV(), 'sample data', { skipPatientPrompt: true, skipGroupingPrompt: true }));
+  $('sampleCsvDownload').addEventListener('click', () => download(sampleCSV().replace(/\r?\n/g, '\r\n'), 'sample data.csv', 'text/csv;charset=utf-8'));
+  $('sampleExcelDownload').addEventListener('click', async () => {
+    const button = $('sampleExcelDownload');
+    button.disabled = true;
+    try {
+      const XLSX = await loadSheetJS();
+      const rows = parseCSV(sampleCSV()).rows.map((row, index) => index === 0 ? row : row.map(value => {
+        if (value.trim() === '' || value === 'NA') return value;
+        const numericValue = Number(value);
+        return Number.isFinite(numericValue) ? numericValue : value;
+      }));
+      const worksheet = XLSX.utils.aoa_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Sample data');
+      const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      download(bytes, 'sample data.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    } catch (e) {
+      showError(e.message || 'Could not create the sample Excel file.');
+    } finally {
+      button.disabled = false;
+    }
+  });
   $('reset').addEventListener('click', reset);
   $('restart').addEventListener('click', reset);
   document.querySelectorAll('#stats [data-sort]').forEach(b => b.addEventListener('click', () => {

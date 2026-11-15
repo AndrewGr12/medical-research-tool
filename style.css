@@ -42,6 +42,8 @@ footer.privacy{display:flex;justify-content:space-between;align-items:flex-start
 
 /* File header */
 .fileinfo{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:12px}
+.fileinfo-main{min-width:0}
+.fileinfo-title{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .fileinfo h2{margin:0 0 4px;word-break:break-all}
 dl#fstats{display:flex;flex-wrap:wrap;gap:2px 20px;margin:0;font-size:.875rem}
 #fstats div{display:flex;gap:6px}#fstats dt{color:var(--mute)}#fstats dd{margin:0;font-weight:600}#fstats .count-first,html[lang="ar"] #fstats div{flex-direction:row-reverse}
@@ -138,6 +140,7 @@ dialog h2{margin-top:0;word-break:break-word}
   .language-picker{align-items:flex-start;flex-direction:column}.language-options{width:100%}.language-options .btn{flex:1 1 calc(50% - 6px)}
   .page-header{gap:8px}.page-header h1{font-size:1.4rem}#restart{font-size:1.2rem;padding:10px 12px}.header-actions{gap:6px}.header-actions .btn{font-size:1.2rem;padding:10px 12px}
   .fileinfo{flex-direction:column}
+  .fileinfo>#reset{align-self:flex-end}
   .spacer{display:none}
   input[type=search]{width:100%}
   .toolbar .btn.primary{flex:1}
