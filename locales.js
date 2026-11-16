@@ -482,7 +482,8 @@
   window.AppI18n = { text, translatePage, selectLanguage, markSelected, get language(){return current;}, get locale(){return localeTag[current];}, get selected(){return selected;} };
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-locale]').forEach(b => b.addEventListener('click', () => selectLanguage(b.dataset.locale)));
-    document.getElementById('guideContinue')?.addEventListener('click', () => {
+    document.getElementById('guideContinue')?.addEventListener('click', event => {
+      event.currentTarget.hidden = true;
       const landing = document.getElementById('landing');
       const subtitle = document.getElementById('siteSubtitle');
       if (landing) landing.hidden = false;

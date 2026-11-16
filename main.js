@@ -377,6 +377,7 @@ function uploadConsentGranted(dialog, file) {
 function renderAll(warnings) {
   if ($('results').hidden) fadeHide($('landing'), () => { fadeShow($('results')); $('restart').hidden = false; const h = $('home').querySelector('[data-h]'); if (h) h.focus(); });
   else $('restart').hidden = false;
+  $('guideContinue').hidden = true;
   $('fname').textContent = state.fileName;
   $('sampleExportMenu').hidden = state.fileName !== 'sample data';
   $('fname').setAttribute('data-raw', '');

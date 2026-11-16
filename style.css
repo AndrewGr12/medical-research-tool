@@ -410,3 +410,5 @@ dialog.grouping-dialog{width:min(620px,calc(100% - 28px));max-width:620px;max-he
 .grouping-variable-option{display:grid;grid-template-columns:18px minmax(0,1fr);grid-template-rows:auto auto;column-gap:9px;align-items:center;min-width:0;padding:9px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer}
 .grouping-variable-option:hover{border-color:var(--accent);background:var(--accent-soft)}.grouping-variable-option input{grid-row:1/3;accent-color:var(--accent)}.grouping-variable-name{overflow-wrap:anywhere;font-weight:550}.grouping-variable-option small{color:var(--mute);font-size:.76rem}.grouping-dialog .patient-actions{position:sticky;bottom:-18px;padding:12px 0 2px;background:#fff}
 @media(max-width:540px){.grouping-variable-list{grid-template-columns:1fr;max-height:45vh}}
+
+#guideContinue[hidden]{display:none!important}
