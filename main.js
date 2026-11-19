@@ -1139,18 +1139,21 @@ function renderT1() {
 const t1Matrix = () => { const t = buildTable1(); return [t.header.map(safe), ...t.rows.map(r => [safe(r[0]), ...r.slice(1)]), [''], ...t.notes.map(x => [x])]; };
 const missingDataMatrix = () => { const t = buildMissingDataTable(); return [t.header.map(safe), ...t.rows.map(r => r.map(safe))]; };
 
+function defaultFigure(type = 'hist') {
+  return { type, x: '', y: '', c: '', g: '', bins: 0, mode: 'count', palette: 'colorblind', showGrid: true, showLegend: true, showP: false, testMode: 'nonparametric', order: 'frequency' };
+}
 function initExtra() {
   document.addEventListener('click', e => {
     document.querySelectorAll('details.menu[open]').forEach(menu => { if (!menu.contains(e.target)) menu.open = false; });
     const v = e.target.closest('[data-view]'), t = e.target.closest('[data-fig]');
     if (v) showView(v.dataset.view);
-    else if (t) { state.fig.type = t.dataset.fig; figRefresh(); if (state.view !== 'figures') return; }
+    else if (t) { if (t.dataset.fig !== state.fig?.type) state.fig = defaultFigure(t.dataset.fig); figRefresh(); if (state.view !== 'figures') return; }
   });
   $('figctl').addEventListener('input', e => { const groupLabel = e.target.dataset.groupColor; if (groupLabel) { const groupName = e.target.dataset.groupVariable; state.fig.groupColors ||= {}; state.fig.groupColors[groupName] ||= {}; state.fig.groupColors[groupName][groupLabel] = e.target.value; figDraw(); return; } const k = e.target.dataset.f; if (!k) return; state.fig[k] = ['bins'].includes(k) ? (Math.floor(+e.target.value) || 0) : ['opacity', 'pointSize'].includes(k) ? Number(e.target.value) : e.target.type === 'checkbox' ? e.target.checked : e.target.value; if (k === 'showP' || k === 'g' || k === 'palette') figRefresh(); else if (['title', 'xLabel', 'yLabel'].includes(k)) { clearTimeout(window.figureInputTimer); window.figureInputTimer = setTimeout(figDraw, 180); } else figDraw(); });
   const updateFigureTextSize = e => { const key = e.target.dataset.figFont; if (!key || !state.fig) return; const value = Number(e.target.value); ensureFigureTextSizes(state.fig)[key] = value; const output = document.getElementById(e.target.id + 'Value'); if (output) { output.value = value + ' px'; output.textContent = value + ' px'; } figDraw(); };
   $('figTextControls').addEventListener('input', updateFigureTextSize);
   $('figTextControls').addEventListener('change', updateFigureTextSize);
-  $('figreset').addEventListener('click', () => { state.fig = null; figRefresh(); });
+  $('figreset').addEventListener('click', () => { state.fig = defaultFigure(state.fig?.type || 'hist'); figRefresh(); });
   $('figsvg').addEventListener('click', () => { const svg = displayedFigureSvg(); if (figCur && svg) download(svg, figName('svg'), 'image/svg+xml'); });
   $('figpng').addEventListener('click', figPng);
   $('figpdf').addEventListener('click', figPdf);
@@ -1416,7 +1419,7 @@ function figScatter(f) {
 
 function figRefresh() {
   const num = state.results.map(r => r.name), cat = state.categorical.map(r => r.name);
-  const f = state.fig || (state.fig = { type: 'hist', x: '', y: '', c: '', g: '', bins: 0, mode: 'count', palette: 'colorblind', showGrid: true, showLegend: true, showP: false, testMode: 'nonparametric', order: 'frequency' });
+  const f = state.fig || (state.fig = defaultFigure());
   if (!FIGS[f.type]) f.type = 'hist';
   ensureFigureTextSizes(f); syncFigureTextControls();
   if (!num.includes(f.x)) f.x = num[0] || '';
